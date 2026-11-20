@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battle Draw – Phase 2 (Basic Simulation)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #fff; font-family: system-ui, -apple-system, sans-serif; }
+    
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #ffffff;
+    }
+    
+    canvas {
+      display: block;
+      cursor: crosshair;
+      background: #ffffff;
+    }
+    
+    /* Top-right controls */
+    #top-controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+    .ctrl-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid #222;
+      background: #fff;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .ctrl-btn:hover { background: #f0f0f0; }
+    .ctrl-btn.active { background: #e8e8e8; }
+    
+    /* Bottom-left unit counter */
+    #unit-counter {
+      position: absolute;
+      bottom: 90px;
+      left: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 10;
+      min-width: 150px;
+    }
+    
+    /* Bottom palette */
+    #palette {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 78px;
+      background: #f8f8f8;
+      border-top: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+    #tabs {
+      display: flex;
+      height: 28px;
+      background: #eee;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      border-right: 1px solid #ddd;
+      user-select: none;
+    }
+    .tab:last-child { border-right: none; }
+    .tab.active { background: #fff; font-weight: 600; }
+    
+    #unit-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      overflow-x: auto;
+    }
+    .unit-btn {
+      min-width: 52px;
+      height: 42px;
+      border: 2px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      user-select: none;
+    }
+    .unit-btn:hover { border-color: #666; }
+    .unit-btn.selected {
+      border-color: #222;
+      background: #f0f0f0;
+      box-shadow: 0 0 0 2px #222;
+    }
+    .unit-btn .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-bottom: 2px;
+    }
+    
+    /* Team Battle controls */
+    #team-controls {
+      position: absolute;
+      bottom: 90px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    #team-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    #team-toggle label { cursor: pointer; user-select: none; }
+    
+    #start-btn {
+      display: none;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 2px solid #222;
+      border-radius: 8px;
+      background: #2ecc71;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    #start-btn:hover { background: #27ae60; }
+    #start-btn.running {
+      background: #e74c3c;
+    }
+    
+    /* Status */
+    #status {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      font-size: 12px;
+      color: #555;
+      background: rgba(255,255,255,0.9);
+      padding: 5px 10px;
+      border-radius: 4px;
+      z-index: 10;
+      max-width: 420px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="c"></canvas>
+    
+    <div id="status">Phase 2 – Basic simulation · Left-drag paint · Right-drag erase · Scroll resize</div>
+    
+    <div id="top-controls">
+      <button class="ctrl-btn" id="btn-clear" title="Clear (C)">🧹</button>
+      <button class="ctrl-btn" id="btn-pause" title="Pause (Space)">⏸</button>
+      <button class="ctrl-btn" id="btn-mute" title="Mute (M)">🔊</button>
+    </div>
+    
+    <div id="unit-counter">
+      <strong>Units alive</strong><br>
+      <span id="counter-content">None yet</span>
+    </div>
+    
+    <div id="team-controls">
+      <div id="team-toggle">
+        <input type="checkbox" id="team-mode" />
+        <label for="team-mode">Team Battle</label>
+      </div>
+      <button id="start-btn">START</button>
+    </div>
+    
+    <div id="palette">
+      <div id="tabs">
+        <div class="tab active" data-tab="army">Army</div>
+        <div class="tab" data-tab="animals">Animals</div>
+        <div class="tab" data-tab="mythical">Mythical</div>
+        <div class="tab" data-tab="terrain">Terrain</div>
+      </div>
+      <div id="unit-row"></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // PHASE 2 – Basic Simulation
+    // Markers:  // BUGFIX:  // TODO:  // DEBUG:
+    // ============================================================
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    
+    // ---- State ----
+    let brushSize = 28;
+    let isDrawing = false;
+    let isErasing = false;
+    let currentUnit = null;
+    let currentTab = 'army';
+    let units = [];               // live units
+    let paused = false;
+    let muted = false;
+    let teamMode = false;
+    let battleStarted = false;    // only used in Team Battle
+    let nextId = 1;
+    let lastTime = 0;
+
+    // Simple stats for Phase 2 (will be expanded later)
+    // speed is pixels per second, hp is hit points, damage per hit, attackRange
+    const UNIT_DEFS = {
+      army: [
+        { id: 'soldier',   label: 'Soldier',   color: '#4a90d9', speed: 55,  hp: 40,  dmg: 8,  range: 22 },
+        { id: 'sniper',    label: 'Sniper',    color: '#2c5aa0', speed: 40,  hp: 25,  dmg: 18, range: 90 },
+        { id: 'grenadier', label: 'Grenadier', color: '#e67e22', speed: 48,  hp: 35,  dmg: 14, range: 45 },
+        { id: 'roman',     label: 'Roman',     color: '#c0392b', speed: 50,  hp: 55,  dmg: 10, range: 24 },
+        { id: 'archer',    label: 'Archer',    color: '#27ae60', speed: 45,  hp: 28,  dmg: 12, range: 75 },
+        { id: 'cavalry',   label: 'Cavalry',   color: '#8e44ad', speed: 85,  hp: 45,  dmg: 12, range: 28 },
+        { id: 'ninja',     label: 'Ninja',     color: '#2c3e50', speed: 70,  hp: 30,  dmg: 15, range: 26 },
+        { id: 'flame',     label: 'Flamethrower', color: '#e74c3c', speed: 42, hp: 38, dmg: 9, range: 38 },
+      ],
+      animals: [
+        { id: 'boar',      label: 'Boar',      color: '#a0522d', speed: 65,  hp: 50,  dmg: 11, range: 24 },
+        { id: 'rat',       label: 'Rat',       color: '#7f8c8d', speed: 80,  hp: 15,  dmg: 5,  range: 16 },
+        { id: 'piranha',   label: 'Piranha',   color: '#1abc9c', speed: 70,  hp: 20,  dmg: 9,  range: 18 },
+        { id: 'cheetah',   label: 'Cheetah',   color: '#f1c40f', speed: 110, hp: 28,  dmg: 10, range: 22 },
+        { id: 'gorilla',   label: 'Gorilla',   color: '#5d4037', speed: 50,  hp: 80,  dmg: 16, range: 30 },
+        { id: 'frog',      label: 'Frog',      color: '#2ecc71', speed: 55,  hp: 22,  dmg: 7,  range: 20 },
+      ],
+      mythical: [
+        { id: 'zombie',    label: 'Zombie',    color: '#7dcea0', speed: 30,  hp: 45,  dmg: 8,  range: 22 },
+        { id: 'slime',     label: 'Slime',     color: '#ff69b4', speed: 35,  hp: 35,  dmg: 6,  range: 20 },
+        { id: 'mage',      label: 'Mage',      color: '#9b59b6', speed: 40,  hp: 25,  dmg: 20, range: 85 },
+        { id: 'giant',     label: 'Giant',     color: '#34495e', speed: 28,  hp: 140, dmg: 22, range: 38 },
+        { id: 'dragon',    label: 'Dragon',    color: '#c0392b', speed: 45,  hp: 120, dmg: 25, range: 55 },
+        { id: 'necro',     label: 'Necromancer', color: '#2c3e50', speed: 38, hp: 40, dmg: 14, range: 70 },
+      ],
+      terrain: [
+        // Terrain currently static – no movement/combat in Phase 2
+        { id: 'wall',      label: 'Wall',      color: '#95a5a6', speed: 0, hp: 9999, dmg: 0, range: 0, isTerrain: true },
+        { id: 'water',     label: 'Water',     color: '#3498db', speed: 0, hp: 9999, dmg: 0, range: 0, isTerrain: true },
+        { id: 'ice',       label: 'Ice',       color: '#aed6f1', speed: 0, hp: 9999, dmg: 0, range: 0, isTerrain: true },
+        { id: 'mine',      label: 'Mine',      color: '#e74c3c', speed: 0, hp: 20,  dmg: 40, range: 28, isTerrain: true },
+        { id: 'banana',    label: 'Banana',    color: '#f1c40f', speed: 0, hp: 10,  dmg: 0,  range: 0, isTerrain: true },
+        { id: 'barrel',    label: 'Barrel',    color: '#8b4513', speed: 0, hp: 30,  dmg: 0,  range: 0, isTerrain: true },
+        { id: 'tree',      label: 'Tree',      color: '#27ae60', speed: 0, hp: 60,  dmg: 0,  range: 0, isTerrain: true },
+      ]
+    };
+
+    // ---- Canvas setup ----
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 78;
+      // DEBUG: keep units inside bounds after resize (simple clamp)
+      units.forEach(u => {
+        u.x = Math.max(u.radius, Math.min(canvas.width - u.radius, u.x));
+        u.y = Math.max(u.radius, Math.min(canvas.height - u.radius, u.y));
+      });
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ---- Palette UI ----
+    function renderTabs() {
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === currentTab);
+      });
+    }
+    
+    function renderUnitButtons() {
+      const row = document.getElementById('unit-row');
+      row.innerHTML = '';
+      const list = UNIT_DEFS[currentTab] || [];
+      list.forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'unit-btn' + (currentUnit && currentUnit.id === u.id ? ' selected' : '');
+        btn.innerHTML = `<div class="swatch" style="background:${u.color}"></div>${u.label}`;
+        btn.onclick = () => {
+          currentUnit = u;
+          renderUnitButtons();
+        };
+        row.appendChild(btn);
+      });
+      if (!currentUnit && list.length) {
+        currentUnit = list[0];
+        renderUnitButtons();
+      }
+    }
+    
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        currentTab = t.dataset.tab;
+        currentUnit = null;
+        renderTabs();
+        renderUnitButtons();
+      });
+    });
+    renderTabs();
+    renderUnitButtons();
+
+    // ---- Helpers ----
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function getTeamForX(x) {
+      if (!teamMode) return 0; // free-for-all
+      return x < canvas.width / 2 ? 1 : 2; // 1 = red (left), 2 = blue (right)
+    }
+
+    function placeUnit(x, y) {
+      if (!currentUnit) return;
+      // BUGFIX: prevent placement while battle is running in team mode? 
+      // Currently allowed so you can reinforce – change if desired.
+      
+      const minDist = brushSize * 0.55;
+      for (const u of units) {
+        const dx = u.x - x;
+        const dy = u.y - y;
+        if (dx*dx + dy*dy < minDist*minDist) return;
+      }
+
+      const def = currentUnit;
+      const radius = brushSize * 0.42;
+
+      units.push({
+        id: nextId++,
+        x, y,
+        vx: 0, vy: 0,
+        type: def.id,
+        label: def.label,
+        color: def.color,
+        radius,
+        maxHp: def.hp,
+        hp: def.hp,
+        speed: def.speed,
+        dmg: def.dmg,
+        range: def.range,
+        team: getTeamForX(x),
+        isTerrain: !!def.isTerrain,
+        hitFlash: 0,          // visual feedback
+        attackCooldown: 0
+      });
+      updateCounter();
+    }
+
+    function eraseAt(x, y) {
+      const r = brushSize * 0.65;
+      const before = units.length;
+      units = units.filter(u => {
+        const dx = u.x - x;
+        const dy = u.y - y;
+        return (dx*dx + dy*dy) > r*r;
+      });
+      if (units.length !== before) updateCounter();
+    }
+
+    function updateCounter() {
+      const counts = {};
+      let alive = 0;
+      units.forEach(u => {
+        if (u.isTerrain) return;
+        counts[u.label] = (counts[u.label] || 0) + 1;
+        alive++;
+      });
+      const el = document.getElementById('counter-content');
+      if (alive === 0) {
+        el.textContent = 'None yet';
+      } else {
+        el.innerHTML = Object.entries(counts)
+          .map(([k,v]) => `${k}: ${v}`)
+          .join('<br>') + `<br><strong>Total: ${alive}</strong>`;
+      }
+    }
+
+    // ---- Simulation ----
+    function findNearestEnemy(unit) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const other of units) {
+        if (other === unit) continue;
+        if (other.isTerrain) continue;
+        if (other.hp <= 0) continue;
+        
+        // Team logic
+        if (teamMode) {
+          if (other.team === unit.team) continue;
+        } else {
+          // free-for-all: everyone is enemy
+        }
+
+        const dx = other.x - unit.x;
+        const dy = other.y - unit.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = other;
+        }
+      }
+      return { target: best, dist: bestDist };
+    }
+
+    function updateSimulation(dt) {
+      if (paused) return;
+      if (teamMode && !battleStarted) return;
+
+      // Movement + attack
+      for (const u of units) {
+        if (u.isTerrain || u.hp <= 0) continue;
+
+        u.attackCooldown = Math.max(0, u.attackCooldown - dt);
+        u.hitFlash = Math.max(0, u.hitFlash - dt);
+
+        const { target, dist } = findNearestEnemy(u);
+
+        if (target) {
+          // Move toward target if outside attack range
+          if (dist > u.range * 0.85) {
+            const dx = target.x - u.x;
+            const dy = target.y - u.y;
+            const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            u.vx = (dx / len) * u.speed;
+            u.vy = (dy / len) * u.speed;
+          } else {
+            // In range → stop and attack
+            u.vx *= 0.7;
+            u.vy *= 0.7;
+
+            if (u.attackCooldown <= 0) {
+              target.hp -= u.dmg;
+              target.hitFlash = 0.18;
+              u.attackCooldown = 0.55; // attacks per second roughly
+              // DEBUG: console.log(`${u.label} hit ${target.label} for ${u.dmg}`);
+            }
+          }
+        } else {
+          // No enemies – slow down
+          u.vx *= 0.9;
+          u.vy *= 0.9;
+        }
+
+        // Apply velocity
+        u.x += u.vx * dt;
+        u.y += u.vy * dt;
+
+        // Keep inside canvas
+        u.x = Math.max(u.radius, Math.min(canvas.width - u.radius, u.x));
+        u.y = Math.max(u.radius, Math.min(canvas.height - u.radius, u.y));
+      }
+
+      // Remove dead units (and simple mine explosion later)
+      const before = units.length;
+      units = units.filter(u => u.hp > 0);
+      if (units.length !== before) updateCounter();
+    }
+
+    // ---- Render ----
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Team mode divider
+      if (teamMode) {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.05)';
+        ctx.fillRect(0, 0, canvas.width/2, canvas.height);
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.05)';
+        ctx.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height);
+      }
+
+      // Units
+      for (const u of units) {
+        // Flash white when hit
+        const flash = u.hitFlash > 0;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
+        ctx.fillStyle = flash ? '#ffffff' : u.color;
+        ctx.fill();
+        ctx.strokeStyle = u.team === 1 ? '#c0392b' : (u.team === 2 ? '#2980b9' : '#222');
+        ctx.lineWidth = teamMode ? 2.5 : 1.5;
+        ctx.stroke();
+
+        // Tiny health bar
+        if (!u.isTerrain && u.hp < u.maxHp) {
+          const barW = u.radius * 1.6;
+          const barH = 3;
+          const pct = Math.max(0, u.hp / u.maxHp);
+          ctx.fillStyle = '#333';
+          ctx.fillRect(u.x - barW/2, u.y - u.radius - 7, barW, barH);
+          ctx.fillStyle = pct > 0.45 ? '#2ecc71' : '#e74c3c';
+          ctx.fillRect(u.x - barW/2, u.y - u.radius - 7, barW * pct, barH);
+        }
+
+        // Label
+        ctx.fillStyle = '#111';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(u.label.slice(0, 4), u.x, u.y + 3);
+      }
+    }
+
+    // ---- Main loop ----
+    function loop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000); // clamp dt
+      lastTime = timestamp;
+
+      updateSimulation(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // ---- Input ----
+    canvas.addEventListener('mousedown', e => {
+      const pos = getPos(e);
+      if (e.button === 0) {
+        isDrawing = true;
+        placeUnit(pos.x, pos.y);
+      } else if (e.button === 2) {
+        isErasing = true;
+        eraseAt(pos.x, pos.y);
+      }
+    });
+    
+    canvas.addEventListener('mousemove', e => {
+      const pos = getPos(e);
+      if (isDrawing) placeUnit(pos.x, pos.y);
+      else if (isErasing) eraseAt(pos.x, pos.y);
+    });
+    
+    window.addEventListener('mouseup', () => {
+      isDrawing = false;
+      isErasing = false;
+    });
+    
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      brushSize = Math.max(12, Math.min(80, brushSize - Math.sign(e.deltaY) * 4));
+      document.getElementById('status').textContent =
+        `Phase 2 – Brush: ${brushSize}px · Simulation active`;
+    }, { passive: false });
+
+    // Buttons
+    document.getElementById('btn-clear').onclick = () => {
+      units = [];
+      battleStarted = false;
+      updateStartButton();
+      updateCounter();
+    };
+    
+    document.getElementById('btn-pause').onclick = () => {
+      paused = !paused;
+      document.getElementById('btn-pause').textContent = paused ? '▶' : '⏸';
+      document.getElementById('btn-pause').classList.toggle('active', paused);
+    };
+    
+    document.getElementById('btn-mute').onclick = () => {
+      muted = !muted;
+      document.getElementById('btn-mute').textContent = muted ? '🔇' : '🔊';
+    };
+
+    const startBtn = document.getElementById('start-btn');
+    function updateStartButton() {
+      if (teamMode) {
+        startBtn.style.display = 'block';
+        if (battleStarted) {
+          startBtn.textContent = 'RUNNING…';
+          startBtn.classList.add('running');
+        } else {
+          startBtn.textContent = 'START';
+          startBtn.classList.remove('running');
+        }
+      } else {
+        startBtn.style.display = 'none';
+        battleStarted = false;
+      }
+    }
+
+    document.getElementById('team-mode').onchange = (e) => {
+      teamMode = e.target.checked;
+      battleStarted = false;
+      // Re-assign teams based on current positions
+      units.forEach(u => {
+        if (!u.isTerrain) u.team = getTeamForX(u.x);
+      });
+      updateStartButton();
+    };
+
+    startBtn.onclick = () => {
+      if (!teamMode) return;
+      battleStarted = true;
+      updateStartButton();
+    };
+
+    // Keyboard
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        document.getElementById('btn-pause').click();
+      } else if (e.key === 'c' || e.key === 'C') {
+        document.getElementById('btn-clear').click();
+      } else if (e.key === 'm' || e.key === 'M') {
+        document.getElementById('btn-mute').click();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        const tabs = ['army','animals','mythical','terrain'];
+        const idx = tabs.indexOf(currentTab);
+        currentTab = tabs[(idx + 1) % tabs.length];
+        currentUnit = null;
+        renderTabs();
+        renderUnitButtons();
+      }
+    });
+
+    // Initial status
+    document.getElementById('status').textContent =
+      'Phase 2 – Basic AI + combat · Paint some units and watch them fight';
+  </script>
+</body>
+</html>

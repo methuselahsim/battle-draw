@@ -1,0 +1,52 @@
+🔫️🖋️
+
+
+
+
+
+
+
+
+These are cool expansion ideas. Here’s a clear breakdown of what they would mean and how they could fit:
+
+Current project status
+We’re still building a nearly accurate Battle Draw clone. The core (drawing armies → watching them fight) is the main goal. We’ve got:
+Drawing / erasing / brush size
+Teams + free mode
+Basic AI + combat
+Emojis + size variation
+Projectiles + flamethrower
+
+Your new ideas ranked by complexity & fit
+
+| Idea | Difficulty | How well it fits Battle Draw | Notes |
+|------|------------|------------------------------|-------|
+| Block placing | Medium | Good | Easy to add as a new “Terrain” tool or separate mode. Walls/blocks that units can stand on or be blocked by. |
+| Falling sand (water, fire, chemicals, seeds) | High | Excellent potential | This is basically turning it into a Sandboxels-style engine. Very fun, but a big technical jump (cellular automata). |
+| Survival (hunger, eating, planting, growing) | High | Medium | Requires resource loops, timers, player character or unit needs. Changes the game from “watch armies fight” to management. |
+| Platformer mode | High | Low-Medium | Needs gravity, jumping, solid platforms, player control. Big shift from top-down army sandbox. |
+| 3D mode | Very High | Low | Completely different tech (Three.js or similar). Would essentially be a new project. |
+
+Recommended paths forward
+
+Option 1 – Stay focused (recommended for now)  
+Keep improving the Battle Draw clone until it feels close to the original (better physics, more special interactions like barrel throwing, better death animations, sound, etc.). Then decide whether to expand.
+
+Option 2 – Hybrid expansion  
+Add the easiest high-value features first:
+Better block / terrain placing (solid walls that units collide with)
+Simple falling-sand elements (water + fire + some reactions)
+Keep the army fighting on top of that
+
+Option 3 – Full pivot  
+Turn this into a bigger sandbox game with survival + falling sand + armies. This would be a much larger project.
+
+Quick question so I know how to proceed:
+
+Do you want to:
+
+A) Keep polishing the pure Battle Draw clone for now (more accuracy, better combat feel, special interactions)?  
+B) Start adding sandbox features (blocks + simple falling sand) on top of what we have?  
+C) Go bigger and plan a survival + falling-sand + army hybrid?
+
+Just reply with A, B, C, or a mix of what you want next and I’ll adjust the next phase accordingly.

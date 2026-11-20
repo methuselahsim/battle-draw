@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battle Draw – Phase 1 (Visual + Drawing Scaffold)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #fff; font-family: system-ui, -apple-system, sans-serif; }
+    
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #ffffff;
+    }
+    
+    canvas {
+      display: block;
+      cursor: crosshair;
+      background: #ffffff;
+    }
+    
+    /* Top-right controls */
+    #top-controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+    .ctrl-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid #222;
+      background: #fff;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      transition: background 0.15s;
+    }
+    .ctrl-btn:hover { background: #f0f0f0; }
+    .ctrl-btn.active { background: #e8e8e8; }
+    
+    /* Bottom-left unit counter (placeholder) */
+    #unit-counter {
+      position: absolute;
+      bottom: 90px;
+      left: 16px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      max-height: 180px;
+      overflow-y: auto;
+      z-index: 10;
+      min-width: 140px;
+    }
+    
+    /* Bottom palette */
+    #palette {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 78px;
+      background: #f8f8f8;
+      border-top: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+    #tabs {
+      display: flex;
+      height: 28px;
+      background: #eee;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      border-right: 1px solid #ddd;
+      user-select: none;
+    }
+    .tab:last-child { border-right: none; }
+    .tab.active { background: #fff; font-weight: 600; }
+    
+    #unit-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      overflow-x: auto;
+    }
+    .unit-btn {
+      min-width: 52px;
+      height: 42px;
+      border: 2px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+    }
+    .unit-btn:hover { border-color: #666; }
+    .unit-btn.selected {
+      border-color: #222;
+      background: #f0f0f0;
+      box-shadow: 0 0 0 2px #222;
+    }
+    .unit-btn .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-bottom: 2px;
+    }
+    
+    /* Team Battle toggle */
+    #team-toggle {
+      position: absolute;
+      bottom: 90px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    #team-toggle label { cursor: pointer; user-select: none; }
+    
+    /* Help / status */
+    #status {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      font-size: 12px;
+      color: #666;
+      background: rgba(255,255,255,0.85);
+      padding: 4px 8px;
+      border-radius: 4px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="c"></canvas>
+    
+    <div id="status">Phase 1 – Drawing scaffold · Left-drag paint · Right-drag erase · Scroll resize</div>
+    
+    <div id="top-controls">
+      <button class="ctrl-btn" id="btn-clear" title="Clear (C)">🧹</button>
+      <button class="ctrl-btn" id="btn-pause" title="Pause (Space)">⏸</button>
+      <button class="ctrl-btn" id="btn-mute" title="Mute (M)">🔊</button>
+    </div>
+    
+    <div id="unit-counter">
+      <strong>Units on field</strong><br>
+      <span id="counter-content">None yet</span>
+    </div>
+    
+    <div id="team-toggle">
+      <input type="checkbox" id="team-mode" />
+      <label for="team-mode">Team Battle</label>
+    </div>
+    
+    <div id="palette">
+      <div id="tabs">
+        <div class="tab active" data-tab="army">Army</div>
+        <div class="tab" data-tab="animals">Animals</div>
+        <div class="tab" data-tab="mythical">Mythical</div>
+        <div class="tab" data-tab="terrain">Terrain</div>
+      </div>
+      <div id="unit-row"></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // PHASE 1 – Visual + Drawing Scaffold
+    // Goal: accurate feel of brush placement, erase, size, UI skeleton
+    // Next: real sprites, simulation, combat after tester feedback
+    // ============================================================
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    
+    // ---- State ----
+    let brushSize = 28;
+    let isDrawing = false;
+    let isErasing = false;
+    let currentUnit = null;
+    let currentTab = 'army';
+    let units = [];               // {x, y, type, color, radius, id}
+    let paused = false;
+    let muted = false;
+    let teamMode = false;
+    let nextId = 1;
+
+    // Placeholder unit definitions (colors + short labels)
+    // These will be replaced by real sprites later
+    const UNIT_DEFS = {
+      army: [
+        { id: 'soldier',   label: 'Soldier',   color: '#4a90d9' },
+        { id: 'sniper',    label: 'Sniper',    color: '#2c5aa0' },
+        { id: 'grenadier', label: 'Grenadier', color: '#e67e22' },
+        { id: 'roman',     label: 'Roman',     color: '#c0392b' },
+        { id: 'archer',    label: 'Archer',    color: '#27ae60' },
+        { id: 'cavalry',   label: 'Cavalry',   color: '#8e44ad' },
+        { id: 'ninja',     label: 'Ninja',     color: '#2c3e50' },
+        { id: 'flame',     label: 'Flamethrower', color: '#e74c3c' },
+      ],
+      animals: [
+        { id: 'boar',      label: 'Boar',      color: '#a0522d' },
+        { id: 'rat',       label: 'Rat',       color: '#7f8c8d' },
+        { id: 'piranha',   label: 'Piranha',   color: '#1abc9c' },
+        { id: 'cheetah',   label: 'Cheetah',   color: '#f1c40f' },
+        { id: 'gorilla',   label: 'Gorilla',   color: '#5d4037' },
+        { id: 'frog',      label: 'Frog',      color: '#2ecc71' },
+      ],
+      mythical: [
+        { id: 'zombie',    label: 'Zombie',    color: '#7dcea0' },
+        { id: 'slime',     label: 'Slime',     color: '#ff69b4' },
+        { id: 'mage',      label: 'Mage',      color: '#9b59b6' },
+        { id: 'giant',     label: 'Giant',     color: '#34495e' },
+        { id: 'dragon',    label: 'Dragon',    color: '#c0392b' },
+        { id: 'necro',     label: 'Necromancer', color: '#2c3e50' },
+      ],
+      terrain: [
+        { id: 'wall',      label: 'Wall',      color: '#95a5a6' },
+        { id: 'water',     label: 'Water',     color: '#3498db' },
+        { id: 'ice',       label: 'Ice',       color: '#aed6f1' },
+        { id: 'mine',      label: 'Mine',      color: '#e74c3c' },
+        { id: 'banana',    label: 'Banana',    color: '#f1c40f' },
+        { id: 'barrel',    label: 'Barrel',    color: '#8b4513' },
+        { id: 'tree',      label: 'Tree',      color: '#27ae60' },
+      ]
+    };
+
+    // ---- Canvas setup ----
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 78; // leave room for palette
+      draw();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ---- Palette UI ----
+    function renderTabs() {
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === currentTab);
+      });
+    }
+    
+    function renderUnitButtons() {
+      const row = document.getElementById('unit-row');
+      row.innerHTML = '';
+      const list = UNIT_DEFS[currentTab] || [];
+      list.forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'unit-btn' + (currentUnit && currentUnit.id === u.id ? ' selected' : '');
+        btn.innerHTML = `<div class="swatch" style="background:${u.color}"></div>${u.label}`;
+        btn.onclick = () => {
+          currentUnit = u;
+          renderUnitButtons();
+        };
+        row.appendChild(btn);
+      });
+      // auto-select first if none
+      if (!currentUnit && list.length) {
+        currentUnit = list[0];
+        renderUnitButtons();
+      }
+    }
+    
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        currentTab = t.dataset.tab;
+        currentUnit = null;
+        renderTabs();
+        renderUnitButtons();
+      });
+    });
+    renderTabs();
+    renderUnitButtons();
+
+    // ---- Drawing helpers ----
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function placeUnit(x, y) {
+      if (!currentUnit || paused) return;
+      // simple spacing so we don't stack infinitely dense
+      const minDist = brushSize * 0.55;
+      for (const u of units) {
+        const dx = u.x - x;
+        const dy = u.y - y;
+        if (dx*dx + dy*dy < minDist*minDist) return;
+      }
+      units.push({
+        id: nextId++,
+        x, y,
+        type: currentUnit.id,
+        label: currentUnit.label,
+        color: currentUnit.color,
+        radius: brushSize * 0.42
+      });
+      updateCounter();
+    }
+
+    function eraseAt(x, y) {
+      const r = brushSize * 0.6;
+      units = units.filter(u => {
+        const dx = u.x - x;
+        const dy = u.y - y;
+        return dx*dx + dy*dy > r*r;
+      });
+      updateCounter();
+    }
+
+    function updateCounter() {
+      const counts = {};
+      units.forEach(u => {
+        counts[u.label] = (counts[u.label] || 0) + 1;
+      });
+      const el = document.getElementById('counter-content');
+      if (Object.keys(counts).length === 0) {
+        el.textContent = 'None yet';
+      } else {
+        el.innerHTML = Object.entries(counts)
+          .map(([k,v]) => `${k}: ${v}`)
+          .join('<br>');
+      }
+    }
+
+    // ---- Render ----
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Team mode visual divider (stub)
+      if (teamMode) {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // faint team tint
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.04)';
+        ctx.fillRect(0, 0, canvas.width/2, canvas.height);
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.04)';
+        ctx.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height);
+      }
+
+      // Draw all units (simple circles for Phase 1)
+      for (const u of units) {
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
+        ctx.fillStyle = u.color;
+        ctx.fill();
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // tiny label
+        ctx.fillStyle = '#111';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(u.label.slice(0, 3), u.x, u.y + 3);
+      }
+    }
+
+    // ---- Input ----
+    canvas.addEventListener('mousedown', e => {
+      const pos = getPos(e);
+      if (e.button === 0) {          // left
+        isDrawing = true;
+        placeUnit(pos.x, pos.y);
+        draw();
+      } else if (e.button === 2) {   // right
+        isErasing = true;
+        eraseAt(pos.x, pos.y);
+        draw();
+      }
+    });
+    
+    canvas.addEventListener('mousemove', e => {
+      const pos = getPos(e);
+      if (isDrawing) {
+        placeUnit(pos.x, pos.y);
+        draw();
+      } else if (isErasing) {
+        eraseAt(pos.x, pos.y);
+        draw();
+      }
+    });
+    
+    window.addEventListener('mouseup', () => {
+      isDrawing = false;
+      isErasing = false;
+    });
+    
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      brushSize = Math.max(12, Math.min(80, brushSize - Math.sign(e.deltaY) * 4));
+      document.getElementById('status').textContent =
+        `Phase 1 – Brush size: ${brushSize}px · Left-drag paint · Right-drag erase`;
+    }, { passive: false });
+
+    // Buttons & keys
+    document.getElementById('btn-clear').onclick = () => {
+      units = [];
+      updateCounter();
+      draw();
+    };
+    document.getElementById('btn-pause').onclick = () => {
+      paused = !paused;
+      document.getElementById('btn-pause').textContent = paused ? '▶' : '⏸';
+    };
+    document.getElementById('btn-mute').onclick = () => {
+      muted = !muted;
+      document.getElementById('btn-mute').textContent = muted ? '🔇' : '🔊';
+    };
+    document.getElementById('team-mode').onchange = (e) => {
+      teamMode = e.target.checked;
+      draw();
+    };
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        document.getElementById('btn-pause').click();
+      } else if (e.key === 'c' || e.key === 'C') {
+        document.getElementById('btn-clear').click();
+      } else if (e.key === 'm' || e.key === 'M') {
+        document.getElementById('btn-mute').click();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        const tabs = ['army','animals','mythical','terrain'];
+        const idx = tabs.indexOf(currentTab);
+        currentTab = tabs[(idx + 1) % tabs.length];
+        currentUnit = null;
+        renderTabs();
+        renderUnitButtons();
+      }
+    });
+
+    // initial draw
+    draw();
+  </script>
+</body>
+</html>

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battle Draw – Phase 5 (Sand + Food + Growth)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #111; font-family: system-ui, sans-serif; }
+    #game-container { position: relative; width: 100vw; height: 100vh; }
+    #c2d, #c3d { position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 90px); display: block; }
+    #c3d { display: none; background: #0f172a; }
+
+    #view-toggle { position: absolute; top: 12px; left: 12px; z-index: 30; display: flex; gap: 6px; }
+    #view-toggle button { padding: 6px 12px; font-size: 13px; font-weight: 600; border: 2px solid #222; border-radius: 8px; background: #fff; cursor: pointer; }
+    #view-toggle button.active { background: #1e293b; color: #fff; }
+
+    #top-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 30; }
+    .ctrl-btn { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #222; background: #fff; cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+
+    #status { position: absolute; top: 56px; left: 12px; z-index: 30; background: rgba(0,0,0,0.65); color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 12px; max-width: 420px; line-height: 1.4; }
+
+    #unit-counter { position: absolute; bottom: 100px; left: 12px; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 13px; z-index: 30; min-width: 140px; max-height: 180px; overflow-y: auto; }
+
+    #team-controls { position: absolute; bottom: 100px; right: 12px; z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    #team-toggle { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+    #start-btn { display: none; padding: 7px 16px; font-weight: 600; border: 2px solid #222; border-radius: 8px; background: #22c55e; color: white; cursor: pointer; }
+    #start-btn.running { background: #ef4444; }
+
+    #palette { position: absolute; bottom: 0; left: 0; right: 0; height: 90px; background: #f1f5f9; border-top: 1px solid #cbd5e1; display: flex; flex-direction: column; z-index: 30; }
+    #main-tabs { display: flex; height: 28px; background: #e2e8f0; }
+    .main-tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; border-right: 1px solid #cbd5e1; }
+    .main-tab.active { background: #fff; font-weight: 600; }
+    #sub-row { flex: 1; display: flex; align-items: center; gap: 6px; padding: 0 10px; overflow-x: auto; }
+    .item-btn { min-width: 54px; height: 48px; border: 2px solid #94a3b8; border-radius: 8px; background: #fff; cursor: pointer; font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .item-btn.selected { border-color: #0f172a; background: #e2e8f0; box-shadow: 0 0 0 2px #0f172a; }
+    .item-btn .emoji { font-size: 18px; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="c2d"></canvas>
+    <div id="c3d"></div>
+
+    <div id="view-toggle">
+      <button id="btn-2d" class="active">2D</button>
+      <button id="btn-3d">3D</button>
+    </div>
+
+    <div id="status">
+      Phase 5 – Sand + Food + Growth<br>
+      WASD move · QE rotate · RF up/down · XZ pitch<br>
+      Paint units <b>or</b> sand elements
+    </div>
+
+    <div id="top-controls">
+      <button class="ctrl-btn" id="btn-clear">🧹</button>
+      <button class="ctrl-btn" id="btn-pause">⏸</button>
+      <button class="ctrl-btn" id="btn-mute">🔊</button>
+    </div>
+
+    <div id="unit-counter">
+      <strong>Units</strong><br>
+      <span id="counter-content">None</span>
+    </div>
+
+    <div id="team-controls">
+      <div id="team-toggle">
+        <input type="checkbox" id="team-mode">
+        <label for="team-mode">Team Battle</label>
+      </div>
+      <button id="start-btn">START</button>
+    </div>
+
+    <div id="palette">
+      <div id="main-tabs">
+        <div class="main-tab active" data-main="army">Army</div>
+        <div class="main-tab" data-main="animals">Animals</div>
+        <div class="main-tab" data-main="mythical">Mythical</div>
+        <div class="main-tab" data-main="sand">Sand / Chem</div>
+      </div>
+      <div id="sub-row"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    // ============================================================
+    // PHASE 5 – Falling Sand + Food + Growth + Chemicals
+    // ============================================================
+
+    const canvas2d = document.getElementById('c2d');
+    const ctx = canvas2d.getContext('2d');
+    const container3d = document.getElementById('c3d');
+
+    // ---------- State ----------
+    let mode = '2d';
+    let brushSize = 26;
+    let isDrawing = false;
+    let isErasing = false;
+    let currentItem = null;
+    let currentMain = 'army';
+    let units = [];
+    let projectiles = [];
+    let paused = false;
+    let teamMode = false;
+    let battleStarted = false;
+    let nextId = 1;
+    let lastTime = 0;
+
+    // Camera
+    const cam = { x: 0, y: 650, z: 850, yaw: 0, pitch: -0.6, speed: 380, turnSpeed: 2.0 };
+    const keys = {};
+
+    // ---------- Sand Grid ----------
+    const SAND_W = 180;          // grid resolution
+    const SAND_H = 110;
+    let sand = new Array(SAND_W * SAND_H).fill(0); // 0 = empty
+    let sandTemp = new Array(SAND_W * SAND_H).fill(0);
+
+    // Element IDs
+    const EMPTY = 0;
+    const SAND  = 1;
+    const WATER = 2;
+    const FIRE  = 3;
+    const SEED  = 4;
+    const PLANT = 5;
+    const FOOD  = 6;
+    const ACID  = 7;
+    const SMOKE = 8;
+
+    const ELEMENT = {
+      0: { name: 'Empty', color: null },
+      1: { name: 'Sand',  color: '#eab308', emoji: '모래' },
+      2: { name: 'Water', color: '#38bdf8', emoji: '💧' },
+      3: { name: 'Fire',  color: '#f97316', emoji: '🔥' },
+      4: { name: 'Seed',  color: '#a3e635', emoji: '🌱' },
+      5: { name: 'Plant', color: '#22c55e', emoji: '🌿' },
+      6: { name: 'Food',  color: '#facc15', emoji: '🍎' },
+      7: { name: 'Acid',  color: '#a3e635', emoji: '🧪' },
+      8: { name: 'Smoke', color: '#94a3b8', emoji: '💨' }
+    };
+
+    // ---------- Unit definitions ----------
+    const UNIT_DEFS = {
+      army: [
+        { id: 'soldier', label: 'Soldier', emoji: '🪖', color: '#3b82f6', speed: 55, hp: 40, dmg: 8, range: 26, sizeMult: 1.0 },
+        { id: 'sniper', label: 'Sniper', emoji: '🎯', color: '#1d4ed8', speed: 38, hp: 25, dmg: 22, range: 150, sizeMult: 0.95, ranged: true, projSpeed: 400 },
+        { id: 'grenadier', label: 'Grenadier', emoji: '💣', color: '#ea580c', speed: 48, hp: 35, dmg: 16, range: 65, sizeMult: 1.05, ranged: true, projSpeed: 260 },
+        { id: 'flame', label: 'Flamethrower', emoji: '🔥', color: '#ef4444', speed: 42, hp: 38, dmg: 6, range: 50, sizeMult: 1.0, flame: true },
+        { id: 'roman', label: 'Roman', emoji: '🛡️', color: '#b91c1c', speed: 50, hp: 60, dmg: 11, range: 28, sizeMult: 1.1 },
+        { id: 'archer', label: 'Archer', emoji: '🏹', color: '#16a34a', speed: 45, hp: 28, dmg: 13, range: 120, sizeMult: 0.95, ranged: true, projSpeed: 360 },
+        { id: 'cavalry', label: 'Cavalry', emoji: '🐴', color: '#7c3aed', speed: 90, hp: 48, dmg: 13, range: 30, sizeMult: 1.15 },
+        { id: 'ninja', label: 'Ninja', emoji: '🥷', color: '#1e293b', speed: 78, hp: 32, dmg: 15, range: 26, sizeMult: 0.95 }
+      ],
+      animals: [
+        { id: 'gorilla', label: 'Gorilla', emoji: '🦍', color: '#44403c', speed: 48, hp: 90, dmg: 18, range: 32, sizeMult: 1.35 },
+        { id: 'boar', label: 'Boar', emoji: '🐗', color: '#92400e', speed: 68, hp: 55, dmg: 12, range: 26, sizeMult: 1.15 },
+        { id: 'cheetah', label: 'Cheetah', emoji: '🐆', color: '#ca8a04', speed: 115, hp: 30, dmg: 11, range: 24, sizeMult: 1.05 },
+        { id: 'rat', label: 'Rat', emoji: '🐀', color: '#78716c', speed: 85, hp: 14, dmg: 5, range: 18, sizeMult: 0.7 },
+        { id: 'frog', label: 'Frog', emoji: '🐸', color: '#16a34a', speed: 55, hp: 22, dmg: 7, range: 22, sizeMult: 0.9 }
+      ],
+      mythical: [
+        { id: 'giant', label: 'Giant', emoji: '👹', color: '#334155', speed: 26, hp: 180, dmg: 28, range: 42, sizeMult: 1.85 },
+        { id: 'dragon', label: 'Dragon', emoji: '🐉', color: '#b91c1c', speed: 42, hp: 140, dmg: 28, range: 65, sizeMult: 1.55, ranged: true, projSpeed: 290 },
+        { id: 'mage', label: 'Mage', emoji: '🧙', color: '#7c3aed', speed: 38, hp: 26, dmg: 22, range: 130, sizeMult: 1.0, ranged: true, projSpeed: 310 },
+        { id: 'zombie', label: 'Zombie', emoji: '🧟', color: '#65a30d', speed: 28, hp: 50, dmg: 9, range: 24, sizeMult: 1.05 },
+        { id: 'slime', label: 'Slime', emoji: '🟢', color: '#ec4899', speed: 35, hp: 38, dmg: 6, range: 22, sizeMult: 1.0 }
+      ],
+      sand: [
+        { id: 'sand', label: 'Sand', emoji: '🏜️', type: SAND },
+        { id: 'water', label: 'Water', emoji: '💧', type: WATER },
+        { id: 'fire', label: 'Fire', emoji: '🔥', type: FIRE },
+        { id: 'seed', label: 'Seed', emoji: '🌱', type: SEED },
+        { id: 'plant', label: 'Plant', emoji: '🌿', type: PLANT },
+        { id: 'food', label: 'Food', emoji: '🍎', type: FOOD },
+        { id: 'acid', label: 'Acid', emoji: '🧪', type: ACID }
+      ]
+    };
+
+    // ---------- 3D ----------
+    let scene, camera, renderer3d, billboards = new Map();
+
+    function init3D() {
+      const w = innerWidth, h = innerHeight - 90;
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+      camera = new THREE.PerspectiveCamera(60, w/h, 1, 8000);
+      renderer3d = new THREE.WebGLRenderer({ antialias: true });
+      renderer3d.setSize(w, h);
+      renderer3d.setPixelRatio(Math.min(devicePixelRatio, 2));
+      container3d.appendChild(renderer3d.domElement);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const d = new THREE.DirectionalLight(0xffffff, 0.5);
+      d.position.set(300, 700, 400);
+      scene.add(d);
+
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(4000, 3000),
+        new THREE.MeshLambertMaterial({ color: 0x1e293b })
+      );
+      ground.rotation.x = -Math.PI/2;
+      scene.add(ground);
+      scene.add(new THREE.GridHelper(4000, 40, 0x334155, 0x1e293b));
+    }
+
+    function createEmojiTexture(emoji) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const cx = c.getContext('2d');
+      cx.font = '96px serif';
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.fillText(emoji, 64, 70);
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function getOrCreateBillboard(u) {
+      if (billboards.has(u.id)) return billboards.get(u.id);
+      const mat = new THREE.SpriteMaterial({ map: createEmojiTexture(u.emoji), transparent: true });
+      const sp = new THREE.Sprite(mat);
+      const s = u.radius * 2.6;
+      sp.scale.set(s, s, 1);
+      scene.add(sp);
+      billboards.set(u.id, sp);
+      return sp;
+    }
+
+    function clearBillboards() {
+      billboards.forEach(s => {
+        scene.remove(s);
+        if (s.material.map) s.material.map.dispose();
+        s.material.dispose();
+      });
+      billboards.clear();
+    }
+
+    // ---------- Sand helpers ----------
+    function sandIdx(x, y) {
+      return y * SAND_W + x;
+    }
+    function inSand(x, y) {
+      return x >= 0 && x < SAND_W && y >= 0 && y < SAND_H;
+    }
+    function getSand(x, y) {
+      if (!inSand(x, y)) return EMPTY;
+      return sand[sandIdx(x, y)];
+    }
+    function setSand(x, y, v) {
+      if (inSand(x, y)) sand[sandIdx(x, y)] = v;
+    }
+
+    function updateSand() {
+      // copy to temp
+      for (let i = 0; i < sand.length; i++) sandTemp[i] = sand[i];
+
+      for (let y = SAND_H - 2; y >= 0; y--) {
+        for (let x = 0; x < SAND_W; x++) {
+          const i = sandIdx(x, y);
+          const e = sand[i];
+          if (e === EMPTY) continue;
+
+          // Sand falls
+          if (e === SAND) {
+            if (getSand(x, y+1) === EMPTY) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x, y+1)] = SAND;
+            } else if (getSand(x-1, y+1) === EMPTY && Math.random() < 0.5) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x-1, y+1)] = SAND;
+            } else if (getSand(x+1, y+1) === EMPTY) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x+1, y+1)] = SAND;
+            }
+          }
+
+          // Water flows
+          else if (e === WATER) {
+            if (getSand(x, y+1) === EMPTY) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x, y+1)] = WATER;
+            } else {
+              const dir = Math.random() < 0.5 ? -1 : 1;
+              if (getSand(x+dir, y) === EMPTY) {
+                sandTemp[i] = EMPTY;
+                sandTemp[sandIdx(x+dir, y)] = WATER;
+              } else if (getSand(x-dir, y) === EMPTY) {
+                sandTemp[i] = EMPTY;
+                sandTemp[sandIdx(x-dir, y)] = WATER;
+              }
+            }
+            // water puts out fire
+            if (getSand(x, y+1) === FIRE) sandTemp[sandIdx(x, y+1)] = SMOKE;
+          }
+
+          // Fire
+          else if (e === FIRE) {
+            // rise / random
+            if (Math.random() < 0.3 && getSand(x, y-1) === EMPTY) {
+              sandTemp[i] = SMOKE;
+              sandTemp[sandIdx(x, y-1)] = FIRE;
+            } else if (Math.random() < 0.08) {
+              sandTemp[i] = SMOKE;
+            }
+            // burn neighbors
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy]) => {
+              const n = getSand(x+dx, y+dy);
+              if (n === PLANT || n === FOOD || n === SEED) {
+                sandTemp[sandIdx(x+dx, y+dy)] = FIRE;
+              }
+            });
+          }
+
+          // Seed grows
+          else if (e === SEED) {
+            if (Math.random() < 0.004) sandTemp[i] = PLANT;
+          }
+
+          // Plant produces food occasionally
+          else if (e === PLANT) {
+            if (Math.random() < 0.0015 && getSand(x, y-1) === EMPTY) {
+              sandTemp[sandIdx(x, y-1)] = FOOD;
+            }
+          }
+
+          // Acid dissolves
+          else if (e === ACID) {
+            if (getSand(x, y+1) === EMPTY) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x, y+1)] = ACID;
+            }
+            [[0,1],[1,0],[-1,0]].forEach(([dx,dy]) => {
+              const n = getSand(x+dx, y+dy);
+              if (n === SAND || n === PLANT || n === FOOD || n === SEED) {
+                sandTemp[sandIdx(x+dx, y+dy)] = EMPTY;
+              }
+            });
+          }
+
+          // Smoke rises
+          else if (e === SMOKE) {
+            if (Math.random() < 0.6 && getSand(x, y-1) === EMPTY) {
+              sandTemp[i] = EMPTY;
+              sandTemp[sandIdx(x, y-1)] = SMOKE;
+            } else if (Math.random() < 0.1) {
+              sandTemp[i] = EMPTY;
+            }
+          }
+        }
+      }
+      // swap
+      const tmp = sand;
+      sand = sandTemp;
+      sandTemp = tmp;
+    }
+
+    // ---------- UI ----------
+    function renderMainTabs() {
+      document.querySelectorAll('.main-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.main === currentMain);
+      });
+    }
+    function renderItems() {
+      const row = document.getElementById('sub-row');
+      row.innerHTML = '';
+      const list = UNIT_DEFS[currentMain] || [];
+      list.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'item-btn' + (currentItem && currentItem.id === item.id ? ' selected' : '');
+        btn.innerHTML = `<div class="emoji">${item.emoji}</div>${item.label}`;
+        btn.onclick = () => { currentItem = item; renderItems(); };
+        row.appendChild(btn);
+      });
+      if (!currentItem && list.length) {
+        currentItem = list[0];
+        renderItems();
+      }
+    }
+    document.querySelectorAll('.main-tab').forEach(t => {
+      t.onclick = () => {
+        currentMain = t.dataset.main;
+        currentItem = null;
+        renderMainTabs();
+        renderItems();
+      };
+    });
+    renderMainTabs();
+    renderItems();
+
+    // ---------- Core helpers ----------
+    function resize() {
+      const w = innerWidth, h = innerHeight - 90;
+      canvas2d.width = w;
+      canvas2d.height = h;
+      if (renderer3d) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer3d.setSize(w, h);
+      }
+    }
+    window.addEventListener('resize', resize);
+
+    function getPos(e) {
+      const el = mode === '2d' ? canvas2d : (renderer3d?.domElement || canvas2d);
+      const r = el.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function screenToSand(sx, sy) {
+      return {
+        x: Math.floor((sx / canvas2d.width) * SAND_W),
+        y: Math.floor((sy / canvas2d.height) * SAND_H)
+      };
+    }
+
+    function placeAt(sx, sy) {
+      if (!currentItem) return;
+
+      // Sand elements
+      if (currentMain === 'sand') {
+        const s = screenToSand(sx, sy);
+        const r = Math.max(1, Math.floor(brushSize / 12));
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx*dx + dy*dy <= r*r) {
+              setSand(s.x + dx, s.y + dy, currentItem.type);
+            }
+          }
+        }
+        return;
+      }
+
+      // Units
+      let x = sx, y = sy;
+      if (mode === '3d') {
+        // rough mapping
+        x = (sx / canvas2d.width - 0.5) * 2000;
+        y = (sy / canvas2d.height - 0.5) * 1400;
+      }
+
+      const minDist = brushSize * 0.5;
+      for (const u of units) {
+        const dx = u.x - x, dy = u.y - y;
+        if (dx*dx + dy*dy < minDist*minDist) return;
+      }
+
+      const def = currentItem;
+      const radius = brushSize * 0.37 * (def.sizeMult || 1);
+      units.push({
+        id: nextId++, x, y, vx: 0, vy: 0,
+        type: def.id, label: def.label, emoji: def.emoji, color: def.color,
+        radius, maxHp: def.hp, hp: def.hp, speed: def.speed, dmg: def.dmg, range: def.range,
+        team: teamMode ? (x < (mode==='2d' ? canvas2d.width/2 : 0) ? 1 : 2) : 0,
+        ranged: !!def.ranged, flame: !!def.flame, projSpeed: def.projSpeed || 300,
+        hitFlash: 0, attackCooldown: 0
+      });
+      updateCounter();
+    }
+
+    function eraseAt(sx, sy) {
+      // erase sand
+      const s = screenToSand(sx, sy);
+      const r = Math.max(1, Math.floor(brushSize / 10));
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx*dx + dy*dy <= r*r) setSand(s.x+dx, s.y+dy, EMPTY);
+        }
+      }
+      // erase units
+      let x = sx, y = sy;
+      if (mode === '3d') {
+        x = (sx / canvas2d.width - 0.5) * 2000;
+        y = (sy / canvas2d.height - 0.5) * 1400;
+      }
+      const rr = brushSize * 0.7;
+      units = units.filter(u => {
+        const dx = u.x - x, dy = u.y - y;
+        return dx*dx + dy*dy > rr*rr;
+      });
+      updateCounter();
+      if (mode === '3d') clearBillboards();
+    }
+
+    function updateCounter() {
+      const counts = {};
+      let total = 0;
+      units.forEach(u => {
+        counts[u.label] = (counts[u.label] || 0) + 1;
+        total++;
+      });
+      document.getElementById('counter-content').innerHTML = total === 0 ? 'None' :
+        Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join('<br>') + `<br><b>Total: ${total}</b>`;
+    }
+
+    // ---------- Simulation (units) ----------
+    function isEnemy(a, b) {
+      if (a === b || a.hp <= 0 || b.hp <= 0) return false;
+      if (teamMode) return a.team && b.team && a.team !== b.team;
+      return a.type !== b.type;
+    }
+    function findNearestEnemy(u) {
+      let best = null, bestD = Infinity;
+      for (const o of units) {
+        if (!isEnemy(u, o)) continue;
+        const d = Math.hypot(o.x - u.x, o.y - u.y);
+        if (d < bestD) { bestD = d; best = o; }
+      }
+      return { target: best, dist: bestD };
+    }
+    function spawnProjectile(from, to) {
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const len = Math.hypot(dx, dy) || 1;
+      projectiles.push({
+        x: from.x, y: from.y,
+        vx: dx/len * from.projSpeed, vy: dy/len * from.projSpeed,
+        dmg: from.dmg, team: from.team, ownerType: from.type, life: 2.0, radius: 4
+      });
+    }
+
+    function updateUnits(dt) {
+      if (paused || (teamMode && !battleStarted)) return;
+
+      for (const u of units) {
+        u.attackCooldown = Math.max(0, u.attackCooldown - dt);
+        u.hitFlash = Math.max(0, u.hitFlash - dt);
+
+        const { target, dist } = findNearestEnemy(u);
+        if (target) {
+          if (dist > u.range * 0.9) {
+            const dx = target.x - u.x, dy = target.y - u.y;
+            const len = Math.hypot(dx, dy) || 1;
+            u.vx = dx/len * u.speed;
+            u.vy = dy/len * u.speed;
+          } else {
+            u.vx *= 0.6; u.vy *= 0.6;
+            if (u.attackCooldown <= 0) {
+              if (u.flame) { target.hp -= u.dmg; target.hitFlash = 0.12; u.attackCooldown = 0.16; }
+              else if (u.ranged) { spawnProjectile(u, target); u.attackCooldown = 0.65; }
+              else { target.hp -= u.dmg; target.hitFlash = 0.15; u.attackCooldown = 0.5; }
+            }
+          }
+        } else {
+          u.vx *= 0.9; u.vy *= 0.9;
+        }
+        u.x += u.vx * dt;
+        u.y += u.vy * dt;
+      }
+
+      // projectiles
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+        let hit = false;
+        for (const u of units) {
+          if (u.hp <= 0) continue;
+          if (teamMode && p.team === u.team) continue;
+          if (!teamMode && p.ownerType === u.type) continue;
+          if (Math.hypot(u.x - p.x, u.y - p.y) < u.radius + p.radius) {
+            u.hp -= p.dmg; u.hitFlash = 0.18; hit = true; break;
+          }
+        }
+        if (hit || p.life <= 0) projectiles.splice(i, 1);
+      }
+
+      const before = units.length;
+      units = units.filter(u => u.hp > 0);
+      if (units.length !== before) {
+        updateCounter();
+        if (mode === '3d') clearBillboards();
+      }
+    }
+
+    // ---------- Camera ----------
+    function updateCamera(dt) {
+      if (mode !== '3d') return;
+      if (keys['q']) cam.yaw += cam.turnSpeed * dt;
+      if (keys['e']) cam.yaw -= cam.turnSpeed * dt;
+      if (keys['x']) cam.pitch = Math.min(0.3, cam.pitch + 1.4 * dt);
+      if (keys['z']) cam.pitch = Math.max(-1.45, cam.pitch - 1.4 * dt);
+
+      const forward = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+      const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+      const move = new THREE.Vector3();
+      if (keys['w']) move.add(forward);
+      if (keys['s']) move.sub(forward);
+      if (keys['a']) move.sub(right);
+      if (keys['d']) move.add(right);
+      if (move.lengthSq() > 0) {
+        move.normalize().multiplyScalar(cam.speed * dt);
+        cam.x += move.x; cam.z += move.z;
+      }
+      if (keys['r']) cam.y += cam.speed * 0.65 * dt;
+      if (keys['f']) cam.y -= cam.speed * 0.65 * dt;
+      cam.y = Math.max(60, Math.min(2200, cam.y));
+
+      camera.position.set(cam.x, cam.y, cam.z);
+      const look = 700;
+      camera.lookAt(
+        cam.x - Math.sin(cam.yaw) * Math.cos(cam.pitch) * look,
+        cam.y + Math.sin(cam.pitch) * look,
+        cam.z - Math.cos(cam.yaw) * Math.cos(cam.pitch) * look
+      );
+    }
+
+    // ---------- Render ----------
+    function drawSand2D() {
+      const cellW = canvas2d.width / SAND_W;
+      const cellH = canvas2d.height / SAND_H;
+      for (let y = 0; y < SAND_H; y++) {
+        for (let x = 0; x < SAND_W; x++) {
+          const e = getSand(x, y);
+          if (e === EMPTY) continue;
+          ctx.fillStyle = ELEMENT[e].color;
+          ctx.fillRect(x * cellW, y * cellH, cellW + 1, cellH + 1);
+        }
+      }
+    }
+
+    function draw2D() {
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
+
+      drawSand2D();
+
+      if (teamMode) {
+        ctx.fillStyle = 'rgba(239,68,68,0.08)';
+        ctx.fillRect(0, 0, canvas2d.width/2, canvas2d.height);
+        ctx.fillStyle = 'rgba(59,130,246,0.08)';
+        ctx.fillRect(canvas2d.width/2, 0, canvas2d.width/2, canvas2d.height);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.moveTo(canvas2d.width/2, 0);
+        ctx.lineTo(canvas2d.width/2, canvas2d.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      for (const u of units) {
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.radius, 0, Math.PI*2);
+        ctx.fillStyle = u.hitFlash > 0 ? '#fff' : u.color + '66';
+        ctx.fill();
+        if (teamMode) {
+          ctx.strokeStyle = u.team === 1 ? '#ef4444' : '#3b82f6';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+        ctx.font = `${Math.floor(u.radius*1.5)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000';
+        ctx.fillText(u.emoji, u.x, u.y + 1);
+
+        if (u.hp < u.maxHp) {
+          const w = u.radius * 1.6;
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(u.x - w/2, u.y - u.radius - 8, w, 3);
+          ctx.fillStyle = u.hp/u.maxHp > 0.4 ? '#22c55e' : '#ef4444';
+          ctx.fillRect(u.x - w/2, u.y - u.radius - 8, w * (u.hp/u.maxHp), 3);
+        }
+      }
+
+      for (const p of projectiles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+      }
+    }
+
+    function draw3D() {
+      const alive = new Set();
+      for (const u of units) {
+        alive.add(u.id);
+        const sp = getOrCreateBillboard(u);
+        sp.position.set(u.x, u.radius * 1.2, u.y);
+        const s = u.radius * 2.6;
+        sp.scale.set(s, s, 1);
+        sp.material.opacity = u.hitFlash > 0 ? 0.5 : 1;
+      }
+      for (const [id, sp] of billboards) {
+        if (!alive.has(id)) {
+          scene.remove(sp);
+          if (sp.material.map) sp.material.map.dispose();
+          sp.material.dispose();
+          billboards.delete(id);
+        }
+      }
+      renderer3d.render(scene, camera);
+    }
+
+    // ---------- Main loop ----------
+    let sandTick = 0;
+    function loop(t) {
+      if (!lastTime) lastTime = t;
+      const dt = Math.min(0.05, (t - lastTime) / 1000);
+      lastTime = t;
+
+      updateCamera(dt);
+      updateUnits(dt);
+
+      sandTick += dt;
+      if (sandTick > 0.032) {          // ~30 fps for sand
+        updateSand();
+        sandTick = 0;
+      }
+
+      if (mode === '2d') draw2D();
+      else draw3D();
+
+      requestAnimationFrame(loop);
+    }
+
+    // ---------- Mode & Input ----------
+    function setMode(m) {
+      mode = m;
+      document.getElementById('btn-2d').classList.toggle('active', m === '2d');
+      document.getElementById('btn-3d').classList.toggle('active', m === '3d');
+      canvas2d.style.display = m === '2d' ? 'block' : 'none';
+      container3d.style.display = m === '3d' ? 'block' : 'none';
+      if (m === '3d') {
+        if (!renderer3d) init3D();
+        clearBillboards();
+        cam.x = 0; cam.y = 650; cam.z = 850; cam.yaw = 0; cam.pitch = -0.6;
+      }
+    }
+    document.getElementById('btn-2d').onclick = () => setMode('2d');
+    document.getElementById('btn-3d').onclick = () => setMode('3d');
+
+    window.addEventListener('keydown', e => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.code === 'Space') { e.preventDefault(); document.getElementById('btn-pause').click(); }
+      if (e.key.toLowerCase() === 'c') document.getElementById('btn-clear').click();
+    });
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+    function onDown(e) {
+      const p = getPos(e);
+      if (e.button === 0) { isDrawing = true; placeAt(p.x, p.y); }
+      else if (e.button === 2) { isErasing = true; eraseAt(p.x, p.y); }
+    }
+    function onMove(e) {
+      const p = getPos(e);
+      if (isDrawing) placeAt(p.x, p.y);
+      else if (isErasing) eraseAt(p.x, p.y);
+    }
+    window.addEventListener('mouseup', () => { isDrawing = false; isErasing = false; });
+
+    canvas2d.addEventListener('mousedown', onDown);
+    canvas2d.addEventListener('mousemove', onMove);
+    canvas2d.addEventListener('contextmenu', e => e.preventDefault());
+
+    // clear / pause
+    document.getElementById('btn-clear').onclick = () => {
+      units = []; projectiles = [];
+      sand.fill(0);
+      battleStarted = false;
+      clearBillboards();
+      updateCounter();
+      updateStartButton();
+    };
+    document.getElementById('btn-pause').onclick = () => {
+      paused = !paused;
+      document.getElementById('btn-pause').textContent = paused ? '▶' : '⏸';
+    };
+
+    const startBtn = document.getElementById('start-btn');
+    function updateStartButton() {
+      if (teamMode) {
+        startBtn.style.display = 'block';
+        startBtn.textContent = battleStarted ? 'RUNNING…' : 'START';
+        startBtn.classList.toggle('running', battleStarted);
+      } else startBtn.style.display = 'none';
+    }
+    document.getElementById('team-mode').onchange = e => {
+      teamMode = e.target.checked;
+      battleStarted = false;
+      updateStartButton();
+    };
+    startBtn.onclick = () => { if (teamMode) { battleStarted = true; updateStartButton(); } };
+
+    // Boot
+    resize();
+    setMode('2d');
+    requestAnimationFrame(loop);
+
+    // Attach 3D events lazily
+    const _setMode = setMode;
+    setMode = m => {
+      _setMode(m);
+      if (m === '3d' && renderer3d) {
+        const el = renderer3d.domElement;
+        el.addEventListener('mousedown', onDown);
+        el.addEventListener('mousemove', onMove);
+        el.addEventListener('contextmenu', e => e.preventDefault());
+      }
+    };
+  </script>
+</body>
+</html>

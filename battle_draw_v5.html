@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battle Draw – Phase 4a (2D / 3D Toggle)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #111; font-family: system-ui, -apple-system, sans-serif; }
+    
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #c2d, #c3d {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: calc(100% - 78px);
+      display: block;
+    }
+    #c3d { display: none; }
+    
+    #top-controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 10px;
+      z-index: 20;
+    }
+    .ctrl-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid #222;
+      background: #fff;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      user-select: none;
+    }
+    .ctrl-btn:hover { background: #f0f0f0; }
+    .ctrl-btn.active { background: #e8e8e8; }
+    
+    #view-toggle {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 20;
+      display: flex;
+      gap: 6px;
+    }
+    #view-toggle button {
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 2px solid #222;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    #view-toggle button.active {
+      background: #2c3e50;
+      color: #fff;
+    }
+    
+    #unit-counter {
+      position: absolute;
+      bottom: 90px;
+      left: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 20;
+      min-width: 150px;
+    }
+    
+    #palette {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 78px;
+      background: #f8f8f8;
+      border-top: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      z-index: 20;
+    }
+    #tabs {
+      display: flex;
+      height: 28px;
+      background: #eee;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      border-right: 1px solid #ddd;
+      user-select: none;
+    }
+    .tab:last-child { border-right: none; }
+    .tab.active { background: #fff; font-weight: 600; }
+    
+    #unit-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      overflow-x: auto;
+    }
+    .unit-btn {
+      min-width: 56px;
+      height: 46px;
+      border: 2px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .unit-btn:hover { border-color: #666; }
+    .unit-btn.selected {
+      border-color: #222;
+      background: #f0f0f0;
+      box-shadow: 0 0 0 2px #222;
+    }
+    .unit-btn .emoji { font-size: 18px; line-height: 1; }
+    
+    #team-controls {
+      position: absolute;
+      bottom: 90px;
+      right: 16px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    #team-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    #team-toggle label { cursor: pointer; user-select: none; }
+    
+    #start-btn {
+      display: none;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 2px solid #222;
+      border-radius: 8px;
+      background: #2ecc71;
+      color: #fff;
+      cursor: pointer;
+    }
+    #start-btn:hover { background: #27ae60; }
+    #start-btn.running { background: #e74c3c; }
+    
+    #status {
+      position: absolute;
+      top: 60px;
+      left: 16px;
+      font-size: 12px;
+      color: #eee;
+      background: rgba(0,0,0,0.55);
+      padding: 5px 10px;
+      border-radius: 4px;
+      z-index: 20;
+      max-width: 480px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="c2d"></canvas>
+    <div id="c3d"></div>
+    
+    <div id="view-toggle">
+      <button id="btn-2d" class="active">2D</button>
+      <button id="btn-3d">3D</button>
+    </div>
+    
+    <div id="status">Phase 4a – 2D / 3D toggle · Same simulation data</div>
+    
+    <div id="top-controls">
+      <button class="ctrl-btn" id="btn-clear" title="Clear (C)">🧹</button>
+      <button class="ctrl-btn" id="btn-pause" title="Pause (Space)">⏸</button>
+      <button class="ctrl-btn" id="btn-mute" title="Mute (M)">🔊</button>
+    </div>
+    
+    <div id="unit-counter">
+      <strong>Units alive</strong><br>
+      <span id="counter-content">None yet</span>
+    </div>
+    
+    <div id="team-controls">
+      <div id="team-toggle">
+        <input type="checkbox" id="team-mode" />
+        <label for="team-mode">Team Battle</label>
+      </div>
+      <button id="start-btn">START</button>
+    </div>
+    
+    <div id="palette">
+      <div id="tabs">
+        <div class="tab active" data-tab="army">Army</div>
+        <div class="tab" data-tab="animals">Animals</div>
+        <div class="tab" data-tab="mythical">Mythical</div>
+        <div class="tab" data-tab="terrain">Terrain</div>
+      </div>
+      <div id="unit-row"></div>
+    </div>
+  </div>
+
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    // ============================================================
+    // PHASE 4a – 2D / 3D Renderer Swap
+    // Simulation stays 2D. Only the view changes.
+    // ============================================================
+
+    const canvas2d = document.getElementById('c2d');
+    const ctx = canvas2d.getContext('2d');
+    const container3d = document.getElementById('c3d');
+
+    let mode = '2d';               // '2d' | '3d'
+    let brushSize = 28;
+    let isDrawing = false;
+    let isErasing = false;
+    let currentUnit = null;
+    let currentTab = 'army';
+    let units = [];
+    let projectiles = [];
+    let paused = false;
+    let muted = false;
+    let teamMode = false;
+    let battleStarted = false;
+    let nextId = 1;
+    let lastTime = 0;
+
+    // ---------- Unit definitions (same as Phase 3) ----------
+    const UNIT_DEFS = {
+      army: [
+        { id: 'soldier',   label: 'Soldier',   emoji: '🪖', color: '#4a90d9', speed: 55,  hp: 40,  dmg: 8,  range: 26, sizeMult: 1.0 },
+        { id: 'sniper',    label: 'Sniper',    emoji: '🎯', color: '#2c5aa0', speed: 38,  hp: 25,  dmg: 22, range: 160, sizeMult: 0.95, ranged: true, projSpeed: 420 },
+        { id: 'grenadier', label: 'Grenadier', emoji: '💣', color: '#e67e22', speed: 48,  hp: 35,  dmg: 18, range: 70,  sizeMult: 1.05, ranged: true, projSpeed: 280 },
+        { id: 'roman',     label: 'Roman',     emoji: '🛡️', color: '#c0392b', speed: 50,  hp: 60,  dmg: 11, range: 28,  sizeMult: 1.1 },
+        { id: 'archer',    label: 'Archer',    emoji: '🏹', color: '#27ae60', speed: 45,  hp: 28,  dmg: 14, range: 130, sizeMult: 0.95, ranged: true, projSpeed: 380 },
+        { id: 'cavalry',   label: 'Cavalry',   emoji: '🐴', color: '#8e44ad', speed: 95,  hp: 48,  dmg: 13, range: 30,  sizeMult: 1.15 },
+        { id: 'ninja',     label: 'Ninja',     emoji: '🥷', color: '#2c3e50', speed: 78,  hp: 32,  dmg: 16, range: 28,  sizeMult: 0.95 },
+        { id: 'flame',     label: 'Flamethrower', emoji: '🔥', color: '#e74c3c', speed: 42, hp: 40, dmg: 7, range: 55, sizeMult: 1.05, flame: true },
+      ],
+      animals: [
+        { id: 'boar',      label: 'Boar',      emoji: '🐗', color: '#a0522d', speed: 68,  hp: 55,  dmg: 12, range: 26, sizeMult: 1.15 },
+        { id: 'rat',       label: 'Rat',       emoji: '🐀', color: '#7f8c8d', speed: 85,  hp: 14,  dmg: 5,  range: 18, sizeMult: 0.7 },
+        { id: 'piranha',   label: 'Piranha',   emoji: '🐟', color: '#1abc9c', speed: 75,  hp: 20,  dmg: 9,  range: 20, sizeMult: 0.85 },
+        { id: 'cheetah',   label: 'Cheetah',   emoji: '🐆', color: '#f1c40f', speed: 120, hp: 30,  dmg: 11, range: 24, sizeMult: 1.05 },
+        { id: 'gorilla',   label: 'Gorilla',   emoji: '🦍', color: '#5d4037', speed: 48,  hp: 90,  dmg: 18, range: 32, sizeMult: 1.35 },
+        { id: 'frog',      label: 'Frog',      emoji: '🐸', color: '#2ecc71', speed: 55,  hp: 22,  dmg: 7,  range: 22, sizeMult: 0.9 },
+      ],
+      mythical: [
+        { id: 'zombie',    label: 'Zombie',    emoji: '🧟', color: '#7dcea0', speed: 28,  hp: 50,  dmg: 9,  range: 24, sizeMult: 1.05 },
+        { id: 'slime',     label: 'Slime',     emoji: '🟢', color: '#ff69b4', speed: 35,  hp: 38,  dmg: 6,  range: 22, sizeMult: 1.0 },
+        { id: 'mage',      label: 'Mage',      emoji: '🧙', color: '#9b59b6', speed: 38,  hp: 26,  dmg: 24, range: 140, sizeMult: 1.0, ranged: true, projSpeed: 320 },
+        { id: 'giant',     label: 'Giant',     emoji: '👹', color: '#34495e', speed: 26,  hp: 180, dmg: 28, range: 42, sizeMult: 1.85 },
+        { id: 'dragon',    label: 'Dragon',    emoji: '🐉', color: '#c0392b', speed: 42,  hp: 140, dmg: 30, range: 70, sizeMult: 1.55, ranged: true, projSpeed: 300 },
+        { id: 'necro',     label: 'Necromancer', emoji: '💀', color: '#2c3e50', speed: 36, hp: 42, dmg: 16, range: 110, sizeMult: 1.05, ranged: true, projSpeed: 290 },
+      ],
+      terrain: [
+        { id: 'wall',   label: 'Wall',   emoji: '🧱', color: '#95a5a6', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.2, isTerrain: true },
+        { id: 'water',  label: 'Water',  emoji: '💧', color: '#3498db', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.0, isTerrain: true },
+        { id: 'ice',    label: 'Ice',    emoji: '❄️', color: '#aed6f1', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.0, isTerrain: true },
+        { id: 'mine',   label: 'Mine',   emoji: '💣', color: '#e74c3c', speed: 0, hp: 25,  dmg: 50, range: 35, sizeMult: 0.9, isTerrain: true },
+        { id: 'banana', label: 'Banana', emoji: '🍌', color: '#f1c40f', speed: 0, hp: 12,  dmg: 0,  range: 0, sizeMult: 0.8, isTerrain: true },
+        { id: 'barrel', label: 'Barrel', emoji: '🛢️', color: '#8b4513', speed: 0, hp: 35,  dmg: 0,  range: 0, sizeMult: 1.1, isTerrain: true },
+        { id: 'tree',   label: 'Tree',   emoji: '🌳', color: '#27ae60', speed: 0, hp: 70,  dmg: 0,  range: 0, sizeMult: 1.3, isTerrain: true },
+      ]
+    };
+
+    // ---------- 3D Setup ----------
+    let scene, camera, renderer3d, billboards = new Map();
+    let ground;
+
+    function init3D() {
+      const w = window.innerWidth;
+      const h = window.innerHeight - 78;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f4f8);
+
+      camera = new THREE.PerspectiveCamera(50, w / h, 1, 5000);
+      // Gentle isometric-style angle
+      camera.position.set(0, 900, 1100);
+      camera.lookAt(0, 0, 0);
+
+      renderer3d = new THREE.WebGLRenderer({ antialias: true });
+      renderer3d.setSize(w, h);
+      renderer3d.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container3d.appendChild(renderer3d.domElement);
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambient);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+      dir.position.set(300, 600, 400);
+      scene.add(dir);
+
+      // Ground plane
+      const geo = new THREE.PlaneGeometry(3000, 2000);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xe8eef5 });
+      ground = new THREE.Mesh(geo, mat);
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      // Soft grid helper
+      const grid = new THREE.GridHelper(3000, 30, 0xcccccc, 0xdddddd);
+      grid.position.y = 1;
+      scene.add(grid);
+    }
+
+    function createEmojiTexture(emoji, size = 128) {
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const cx = c.getContext('2d');
+      cx.clearRect(0, 0, size, size);
+      cx.font = `${size * 0.75}px serif`;
+      cx.textAlign = 'center';
+      cx.textBaseline = 'middle';
+      cx.fillText(emoji, size / 2, size / 2 + size * 0.05);
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function getOrCreateBillboard(unit) {
+      if (billboards.has(unit.id)) return billboards.get(unit.id);
+
+      const tex = createEmojiTexture(unit.emoji);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      const s = unit.radius * 2.8;
+      sprite.scale.set(s, s, 1);
+      scene.add(sprite);
+      billboards.set(unit.id, sprite);
+      return sprite;
+    }
+
+    function clearBillboards() {
+      billboards.forEach(s => {
+        scene.remove(s);
+        if (s.material.map) s.material.map.dispose();
+        s.material.dispose();
+      });
+      billboards.clear();
+    }
+
+    // ---------- Shared helpers ----------
+    function resize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight - 78;
+
+      canvas2d.width = w;
+      canvas2d.height = h;
+
+      if (renderer3d) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer3d.setSize(w, h);
+      }
+    }
+    window.addEventListener('resize', resize);
+
+    function getPos(e) {
+      const rect = (mode === '2d' ? canvas2d : renderer3d.domElement).getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    // Convert 2D screen → world-ish coordinates (simple for now)
+    function screenToWorld(sx, sy) {
+      // Approximate mapping so drawing still works in 3D view
+      const w = canvas2d.width;
+      const h = canvas2d.height;
+      const worldW = 1800;
+      const worldH = 1200;
+      return {
+        x: (sx / w - 0.5) * worldW,
+        y: (sy / h - 0.5) * worldH
+      };
+    }
+
+    function getTeamForX(x) {
+      if (!teamMode) return 0;
+      // In both views we treat left half as team 1
+      const mid = mode === '2d' ? canvas2d.width / 2 : 0;
+      return (mode === '2d' ? x < mid : x < 0) ? 1 : 2;
+    }
+
+    // ---------- Palette UI (unchanged) ----------
+    function renderTabs() {
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === currentTab);
+      });
+    }
+    
+    function renderUnitButtons() {
+      const row = document.getElementById('unit-row');
+      row.innerHTML = '';
+      const list = UNIT_DEFS[currentTab] || [];
+      list.forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'unit-btn' + (currentUnit && currentUnit.id === u.id ? ' selected' : '');
+        btn.innerHTML = `<div class="emoji">${u.emoji}</div>${u.label}`;
+        btn.onclick = () => { currentUnit = u; renderUnitButtons(); };
+        row.appendChild(btn);
+      });
+      if (!currentUnit && list.length) {
+        currentUnit = list[0];
+        renderUnitButtons();
+      }
+    }
+    
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        currentTab = t.dataset.tab;
+        currentUnit = null;
+        renderTabs();
+        renderUnitButtons();
+      });
+    });
+    renderTabs();
+    renderUnitButtons();
+
+    // ---------- Placement / Erase ----------
+    function placeUnit(sx, sy) {
+      if (!currentUnit) return;
+
+      let x, y;
+      if (mode === '2d') {
+        x = sx; y = sy;
+      } else {
+        const w = screenToWorld(sx, sy);
+        x = w.x; y = w.y;
+      }
+
+      const minDist = brushSize * 0.55;
+      for (const u of units) {
+        const dx = u.x - x, dy = u.y - y;
+        if (dx*dx + dy*dy < minDist*minDist) return;
+      }
+
+      const def = currentUnit;
+      const radius = brushSize * 0.38 * (def.sizeMult || 1);
+
+      units.push({
+        id: nextId++,
+        x, y,
+        vx: 0, vy: 0,
+        type: def.id,
+        label: def.label,
+        emoji: def.emoji,
+        color: def.color,
+        radius,
+        maxHp: def.hp,
+        hp: def.hp,
+        speed: def.speed,
+        dmg: def.dmg,
+        range: def.range,
+        team: getTeamForX(x),
+        isTerrain: !!def.isTerrain,
+        ranged: !!def.ranged,
+        flame: !!def.flame,
+        projSpeed: def.projSpeed || 300,
+        hitFlash: 0,
+        attackCooldown: 0
+      });
+      updateCounter();
+    }
+
+    function eraseAt(sx, sy) {
+      let x, y;
+      if (mode === '2d') { x = sx; y = sy; }
+      else { const w = screenToWorld(sx, sy); x = w.x; y = w.y; }
+
+      const r = brushSize * 0.7;
+      const before = units.length;
+      units = units.filter(u => {
+        const dx = u.x - x, dy = u.y - y;
+        return (dx*dx + dy*dy) > r*r;
+      });
+      if (units.length !== before) {
+        updateCounter();
+        if (mode === '3d') clearBillboards(); // rebuild on next frame
+      }
+    }
+
+    function updateCounter() {
+      const counts = {};
+      let alive = 0;
+      units.forEach(u => {
+        if (u.isTerrain) return;
+        counts[u.label] = (counts[u.label] || 0) + 1;
+        alive++;
+      });
+      const el = document.getElementById('counter-content');
+      el.innerHTML = alive === 0 ? 'None yet' :
+        Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join('<br>') +
+        `<br><strong>Total: ${alive}</strong>`;
+    }
+
+    // ---------- Simulation (unchanged logic) ----------
+    function isEnemy(a, b) {
+      if (a === b || a.isTerrain || b.isTerrain || a.hp <= 0 || b.hp <= 0) return false;
+      if (teamMode) return a.team !== 0 && b.team !== 0 && a.team !== b.team;
+      return a.type !== b.type;
+    }
+
+    function findNearestEnemy(unit) {
+      let best = null, bestDist = Infinity;
+      for (const other of units) {
+        if (!isEnemy(unit, other)) continue;
+        const dx = other.x - unit.x, dy = other.y - unit.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < bestDist) { bestDist = dist; best = other; }
+      }
+      return { target: best, dist: bestDist };
+    }
+
+    function spawnProjectile(from, to) {
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      projectiles.push({
+        x: from.x, y: from.y,
+        vx: (dx / len) * from.projSpeed,
+        vy: (dy / len) * from.projSpeed,
+        dmg: from.dmg,
+        team: from.team,
+        ownerType: from.type,
+        life: 2.2,
+        radius: 5
+      });
+    }
+
+    function updateSimulation(dt) {
+      if (paused) return;
+      if (teamMode && !battleStarted) return;
+
+      for (const u of units) {
+        if (u.isTerrain || u.hp <= 0) continue;
+        u.attackCooldown = Math.max(0, u.attackCooldown - dt);
+        u.hitFlash = Math.max(0, u.hitFlash - dt);
+
+        const { target, dist } = findNearestEnemy(u);
+        if (target) {
+          if (dist > u.range * 0.9) {
+            const dx = target.x - u.x, dy = target.y - u.y;
+            const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            u.vx = (dx / len) * u.speed;
+            u.vy = (dy / len) * u.speed;
+          } else {
+            u.vx *= 0.65; u.vy *= 0.65;
+            if (u.attackCooldown <= 0) {
+              if (u.flame) {
+                target.hp -= u.dmg; target.hitFlash = 0.15; u.attackCooldown = 0.18;
+              } else if (u.ranged) {
+                spawnProjectile(u, target); u.attackCooldown = 0.7;
+              } else {
+                target.hp -= u.dmg; target.hitFlash = 0.18; u.attackCooldown = 0.55;
+              }
+            }
+          }
+        } else {
+          u.vx *= 0.92; u.vy *= 0.92;
+        }
+        u.x += u.vx * dt;
+        u.y += u.vy * dt;
+      }
+
+      // Projectiles
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+        let hit = false;
+        for (const u of units) {
+          if (u.isTerrain || u.hp <= 0) continue;
+          if (teamMode && p.team === u.team) continue;
+          if (!teamMode && p.ownerType === u.type) continue;
+          const dx = u.x - p.x, dy = u.y - p.y;
+          if (dx*dx + dy*dy < (u.radius + p.radius)**2) {
+            u.hp -= p.dmg; u.hitFlash = 0.2; hit = true; break;
+          }
+        }
+        if (hit || p.life <= 0) projectiles.splice(i, 1);
+      }
+
+      const before = units.length;
+      units = units.filter(u => u.hp > 0);
+      if (units.length !== before) {
+        updateCounter();
+        if (mode === '3d') clearBillboards();
+      }
+    }
+
+    // ---------- Renderers ----------
+    function draw2D() {
+      ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
+
+      if (teamMode) {
+        ctx.fillStyle = 'rgba(231,76,60,0.07)';
+        ctx.fillRect(0, 0, canvas2d.width/2, canvas2d.height);
+        ctx.fillStyle = 'rgba(52,152,219,0.07)';
+        ctx.fillRect(canvas2d.width/2, 0, canvas2d.width/2, canvas2d.height);
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath();
+        ctx.moveTo(canvas2d.width/2, 0);
+        ctx.lineTo(canvas2d.width/2, canvas2d.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      for (const u of units) {
+        const flash = u.hitFlash > 0;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.radius, 0, Math.PI*2);
+        ctx.fillStyle = flash ? '#fff' : u.color + '55';
+        ctx.fill();
+        if (teamMode) {
+          ctx.strokeStyle = u.team === 1 ? '#c0392b' : '#2980b9';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+        ctx.font = `${Math.floor(u.radius*1.55)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000';
+        ctx.fillText(u.emoji, u.x, u.y + 1);
+
+        if (!u.isTerrain && u.hp < u.maxHp) {
+          const barW = u.radius * 1.7, barH = 4;
+          const pct = Math.max(0, u.hp / u.maxHp);
+          ctx.fillStyle = '#333';
+          ctx.fillRect(u.x - barW/2, u.y - u.radius - 9, barW, barH);
+          ctx.fillStyle = pct > 0.4 ? '#2ecc71' : '#e74c3c';
+          ctx.fillRect(u.x - barW/2, u.y - u.radius - 9, barW * pct, barH);
+        }
+      }
+
+      for (const p of projectiles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+        ctx.fillStyle = '#222';
+        ctx.fill();
+      }
+    }
+
+    function draw3D() {
+      // Sync billboards
+      const aliveIds = new Set();
+      for (const u of units) {
+        aliveIds.add(u.id);
+        const sprite = getOrCreateBillboard(u);
+        sprite.position.set(u.x, u.radius * 1.2, u.y);
+        const s = u.radius * 2.8;
+        sprite.scale.set(s, s, 1);
+        if (u.hitFlash > 0) sprite.material.opacity = 0.5;
+        else sprite.material.opacity = 1;
+      }
+      // Remove dead
+      for (const [id, sprite] of billboards) {
+        if (!aliveIds.has(id)) {
+          scene.remove(sprite);
+          if (sprite.material.map) sprite.material.map.dispose();
+          sprite.material.dispose();
+          billboards.delete(id);
+        }
+      }
+
+      renderer3d.render(scene, camera);
+    }
+
+    // ---------- Main loop ----------
+    function loop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      updateSimulation(dt);
+
+      if (mode === '2d') draw2D();
+      else draw3D();
+
+      requestAnimationFrame(loop);
+    }
+
+    // ---------- Mode switch ----------
+    function setMode(m) {
+      mode = m;
+      document.getElementById('btn-2d').classList.toggle('active', m === '2d');
+      document.getElementById('btn-3d').classList.toggle('active', m === '3d');
+      canvas2d.style.display = m === '2d' ? 'block' : 'none';
+      container3d.style.display = m === '3d' ? 'block' : 'none';
+
+      if (m === '3d' && !renderer3d) init3D();
+      if (m === '3d') clearBillboards(); // force rebuild
+      document.getElementById('status').textContent =
+        m === '2d' ? '2D view' : '3D view – emoji billboards · same simulation';
+    }
+
+    document.getElementById('btn-2d').onclick = () => setMode('2d');
+    document.getElementById('btn-3d').onclick = () => setMode('3d');
+
+    // ---------- Input ----------
+    function onPointerDown(e) {
+      const pos = getPos(e);
+      if (e.button === 0) { isDrawing = true; placeUnit(pos.x, pos.y); }
+      else if (e.button === 2) { isErasing = true; eraseAt(pos.x, pos.y); }
+    }
+    function onPointerMove(e) {
+      const pos = getPos(e);
+      if (isDrawing) placeUnit(pos.x, pos.y);
+      else if (isErasing) eraseAt(pos.x, pos.y);
+    }
+    function onPointerUp() { isDrawing = false; isErasing = false; }
+
+    canvas2d.addEventListener('mousedown', onPointerDown);
+    canvas2d.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+    canvas2d.addEventListener('contextmenu', e => e.preventDefault());
+
+    // 3D canvas also needs events (added after init)
+    function attach3DEvents() {
+      if (!renderer3d) return;
+      const el = renderer3d.domElement;
+      el.addEventListener('mousedown', onPointerDown);
+      el.addEventListener('mousemove', onPointerMove);
+      el.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    // Wheel, buttons, keys (same as before)
+    window.addEventListener('wheel', e => {
+      if (e.target.closest('#palette')) return;
+      e.preventDefault();
+      brushSize = Math.max(12, Math.min(90, brushSize - Math.sign(e.deltaY) * 4));
+    }, { passive: false });
+
+    document.getElementById('btn-clear').onclick = () => {
+      units = []; projectiles = [];
+      battleStarted = false;
+      clearBillboards();
+      updateStartButton();
+      updateCounter();
+    };
+    document.getElementById('btn-pause').onclick = () => {
+      paused = !paused;
+      document.getElementById('btn-pause').textContent = paused ? '▶' : '⏸';
+    };
+    document.getElementById('btn-mute').onclick = () => {
+      muted = !muted;
+      document.getElementById('btn-mute').textContent = muted ? '🔇' : '🔊';
+    };
+
+    const startBtn = document.getElementById('start-btn');
+    function updateStartButton() {
+      if (teamMode) {
+        startBtn.style.display = 'block';
+        startBtn.textContent = battleStarted ? 'RUNNING…' : 'START';
+        startBtn.classList.toggle('running', battleStarted);
+      } else {
+        startBtn.style.display = 'none';
+        battleStarted = false;
+      }
+    }
+    document.getElementById('team-mode').onchange = e => {
+      teamMode = e.target.checked;
+      battleStarted = false;
+      units.forEach(u => { if (!u.isTerrain) u.team = getTeamForX(u.x); });
+      updateStartButton();
+    };
+    startBtn.onclick = () => { if (teamMode) { battleStarted = true; updateStartButton(); } };
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); document.getElementById('btn-pause').click(); }
+      else if (e.key.toLowerCase() === 'c') document.getElementById('btn-clear').click();
+      else if (e.key.toLowerCase() === 'm') document.getElementById('btn-mute').click();
+      else if (e.key === 'Tab') {
+        e.preventDefault();
+        const tabs = ['army','animals','mythical','terrain'];
+        currentTab = tabs[(tabs.indexOf(currentTab)+1)%tabs.length];
+        currentUnit = null;
+        renderTabs(); renderUnitButtons();
+      }
+    });
+
+    // Boot
+    resize();
+    setMode('2d');
+    // Delay 3D event attach until first switch
+    const origSetMode = setMode;
+    setMode = function(m) {
+      origSetMode(m);
+      if (m === '3d') setTimeout(attach3DEvents, 50);
+    };
+
+    requestAnimationFrame(loop);
+    document.getElementById('status').textContent = 'Phase 4a ready – switch between 2D and 3D. Same armies, same fight.';
+  </script>
+</body>
+</html>
