@@ -49,6 +49,7 @@
     html.dark #start-btn.running { background: #dc2626; }
     html.dark #c3d { background: #050a10; }
     html.dark #c2d { background: #0a0a0a; }
+    html.dark canvas#c2d { background: #0a0a0a; }
 
     #unit-counter { position: absolute; bottom: 100px; left: 12px; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 13px; z-index: 30; min-width: 140px; max-height: 180px; overflow-y: auto; }
 
@@ -88,6 +89,7 @@
       <button class="ctrl-btn" id="btn-pause">⏸</button>
       <button class="ctrl-btn" id="btn-mute">🔊</button>
       <button class="ctrl-btn" id="btn-theme" title="Toggle dark mode">🌙</button>
+      <button class="ctrl-btn" id="btn-settings" title="Settings">⚙️</button>
     </div>
 
     <div id="unit-counter">
@@ -117,6 +119,7 @@
         <div class="main-tab active" data-main="army">Army</div>
         <div class="main-tab" data-main="animals">Animals</div>
         <div class="main-tab" data-main="mythical">Mythical</div>
+        <div class="main-tab" data-main="terrain">Terrain / Building</div>
         <div class="main-tab" data-main="sand">Sand / Chem</div>
       </div>
       <div id="sub-row"></div>
@@ -134,6 +137,15 @@
     const ctx = canvas2d.getContext('2d');
     const container3d = document.getElementById('c3d');
 
+    // ---------- Settings ----------
+    const SETTINGS = {
+      hungerEnabled: true,
+      xpEnabled: true,
+      friendlyFire: false,
+      showHealthBars: true,
+      showLevel: true
+    };
+
     // ---------- State ----------
     let mode = '2d';
     let brushSize = 26;
@@ -148,6 +160,8 @@
     let battleStarted = false;
     let nextId = 1;
     let lastTime = 0;
+    let selectedUnit = null;
+    let contextMenu = null;
 
     // Camera
     const cam = { x: 0, y: 650, z: 850, yaw: 0, pitch: -0.6, speed: 380, turnSpeed: 2.0 };
@@ -185,28 +199,40 @@
     // ---------- Unit definitions ----------
     const UNIT_DEFS = {
       army: [
-        { id: 'soldier', label: 'Soldier', emoji: '🪖', color: '#3b82f6', speed: 55, hp: 40, dmg: 8, range: 26, sizeMult: 1.0 },
-        { id: 'sniper', label: 'Sniper', emoji: '🎯', color: '#1d4ed8', speed: 38, hp: 25, dmg: 22, range: 150, sizeMult: 0.95, ranged: true, projSpeed: 400 },
-        { id: 'grenadier', label: 'Grenadier', emoji: '💣', color: '#ea580c', speed: 48, hp: 35, dmg: 16, range: 65, sizeMult: 1.05, ranged: true, projSpeed: 260 },
-        { id: 'flame', label: 'Flamethrower', emoji: '🔥', color: '#ef4444', speed: 42, hp: 38, dmg: 6, range: 50, sizeMult: 1.0, flame: true },
-        { id: 'roman', label: 'Roman', emoji: '🛡️', color: '#b91c1c', speed: 50, hp: 60, dmg: 11, range: 28, sizeMult: 1.1 },
-        { id: 'archer', label: 'Archer', emoji: '🏹', color: '#16a34a', speed: 45, hp: 28, dmg: 13, range: 120, sizeMult: 0.95, ranged: true, projSpeed: 360 },
-        { id: 'cavalry', label: 'Cavalry', emoji: '🐴', color: '#7c3aed', speed: 90, hp: 48, dmg: 13, range: 30, sizeMult: 1.15 },
-        { id: 'ninja', label: 'Ninja', emoji: '🥷', color: '#1e293b', speed: 78, hp: 32, dmg: 15, range: 26, sizeMult: 0.95 }
+        { id: 'soldier', label: 'Soldier', emoji: '🪖', color: '#3b82f6', speed: 55, hp: 40, dmg: 8, range: 26, sizeMult: 1.0, hungerRate: 0.8, xpValue: 10 },
+        { id: 'sniper', label: 'Sniper', emoji: '🎯', color: '#1d4ed8', speed: 38, hp: 25, dmg: 22, range: 150, sizeMult: 0.95, ranged: true, projSpeed: 400, hungerRate: 0.6, xpValue: 15 },
+        { id: 'grenadier', label: 'Grenadier', emoji: '💣', color: '#ea580c', speed: 48, hp: 35, dmg: 16, range: 65, sizeMult: 1.05, ranged: true, projSpeed: 260, hungerRate: 0.9, xpValue: 12 },
+        { id: 'flame', label: 'Flamethrower', emoji: '🔥', color: '#ef4444', speed: 42, hp: 38, dmg: 6, range: 50, sizeMult: 1.0, flame: true, hungerRate: 1.0, xpValue: 14 },
+        { id: 'roman', label: 'Roman', emoji: '🛡️', color: '#b91c1c', speed: 50, hp: 60, dmg: 11, range: 28, sizeMult: 1.1, hungerRate: 1.2, xpValue: 18 },
+        { id: 'archer', label: 'Archer', emoji: '🏹', color: '#16a34a', speed: 45, hp: 28, dmg: 13, range: 120, sizeMult: 0.95, ranged: true, projSpeed: 360, hungerRate: 0.7, xpValue: 13 },
+        { id: 'cavalry', label: 'Cavalry', emoji: '🐴', color: '#7c3aed', speed: 90, hp: 48, dmg: 13, range: 30, sizeMult: 1.15, hungerRate: 1.5, xpValue: 20 },
+        { id: 'ninja', label: 'Ninja', emoji: '🥷', color: '#1e293b', speed: 78, hp: 32, dmg: 15, range: 26, sizeMult: 0.95, hungerRate: 0.9, xpValue: 16 }
       ],
       animals: [
-        { id: 'gorilla', label: 'Gorilla', emoji: '🦍', color: '#44403c', speed: 48, hp: 90, dmg: 18, range: 32, sizeMult: 1.35 },
-        { id: 'boar', label: 'Boar', emoji: '🐗', color: '#92400e', speed: 68, hp: 55, dmg: 12, range: 26, sizeMult: 1.15 },
-        { id: 'cheetah', label: 'Cheetah', emoji: '🐆', color: '#ca8a04', speed: 115, hp: 30, dmg: 11, range: 24, sizeMult: 1.05 },
-        { id: 'rat', label: 'Rat', emoji: '🐀', color: '#78716c', speed: 85, hp: 14, dmg: 5, range: 18, sizeMult: 0.7 },
-        { id: 'frog', label: 'Frog', emoji: '🐸', color: '#16a34a', speed: 55, hp: 22, dmg: 7, range: 22, sizeMult: 0.9 }
+        { id: 'gorilla', label: 'Gorilla', emoji: '🦍', color: '#44403c', speed: 48, hp: 90, dmg: 18, range: 32, sizeMult: 1.35, hungerRate: 1.5, xpValue: 25 },
+        { id: 'boar', label: 'Boar', emoji: '🐗', color: '#92400e', speed: 68, hp: 55, dmg: 12, range: 26, sizeMult: 1.15, hungerRate: 1.0, xpValue: 15 },
+        { id: 'cheetah', label: 'Cheetah', emoji: '🐆', color: '#ca8a04', speed: 115, hp: 30, dmg: 11, range: 24, sizeMult: 1.05, hungerRate: 1.8, xpValue: 18 },
+        { id: 'piranha', label: 'Piranha', emoji: '🐟', color: '#14b8a6', speed: 75, hp: 20, dmg: 9, range: 20, sizeMult: 0.85, hungerRate: 0.8, xpValue: 12 },
+        { id: 'rat', label: 'Rat', emoji: '🐀', color: '#78716c', speed: 85, hp: 14, dmg: 5, range: 18, sizeMult: 0.7, hungerRate: 0.5, xpValue: 5 },
+        { id: 'frog', label: 'Frog', emoji: '🐸', color: '#16a34a', speed: 55, hp: 22, dmg: 7, range: 22, sizeMult: 0.9, hungerRate: 0.6, xpValue: 8 }
       ],
       mythical: [
-        { id: 'giant', label: 'Giant', emoji: '👹', color: '#334155', speed: 26, hp: 180, dmg: 28, range: 42, sizeMult: 1.85 },
-        { id: 'dragon', label: 'Dragon', emoji: '🐉', color: '#b91c1c', speed: 42, hp: 140, dmg: 28, range: 65, sizeMult: 1.55, ranged: true, projSpeed: 290 },
-        { id: 'mage', label: 'Mage', emoji: '🧙', color: '#7c3aed', speed: 38, hp: 26, dmg: 22, range: 130, sizeMult: 1.0, ranged: true, projSpeed: 310 },
-        { id: 'zombie', label: 'Zombie', emoji: '🧟', color: '#65a30d', speed: 28, hp: 50, dmg: 9, range: 24, sizeMult: 1.05 },
-        { id: 'slime', label: 'Slime', emoji: '🟢', color: '#ec4899', speed: 35, hp: 38, dmg: 6, range: 22, sizeMult: 1.0 }
+        { id: 'giant', label: 'Giant', emoji: '👹', color: '#334155', speed: 26, hp: 180, dmg: 28, range: 42, sizeMult: 1.85, hungerRate: 2.0, xpValue: 50 },
+        { id: 'dragon', label: 'Dragon', emoji: '🐉', color: '#b91c1c', speed: 42, hp: 140, dmg: 28, range: 65, sizeMult: 1.55, ranged: true, projSpeed: 290, hungerRate: 2.5, xpValue: 60 },
+        { id: 'mage', label: 'Mage', emoji: '🧙', color: '#7c3aed', speed: 38, hp: 26, dmg: 22, range: 130, sizeMult: 1.0, ranged: true, projSpeed: 310, hungerRate: 1.0, xpValue: 30 },
+        { id: 'necro', label: 'Necromancer', emoji: '💀', color: '#1e293b', speed: 36, hp: 42, dmg: 16, range: 110, sizeMult: 1.05, ranged: true, projSpeed: 290, hungerRate: 1.2, xpValue: 35 },
+        { id: 'zombie', label: 'Zombie', emoji: '🧟', color: '#65a30d', speed: 28, hp: 50, dmg: 9, range: 24, sizeMult: 1.05, hungerRate: 0.3, xpValue: 15 },
+        { id: 'slime', label: 'Slime', emoji: '🟢', color: '#ec4899', speed: 35, hp: 38, dmg: 6, range: 22, sizeMult: 1.0, hungerRate: 0.4, xpValue: 10 }
+      ],
+      terrain: [
+        { id: 'wall', label: 'Wall', emoji: '🧱', color: '#94a3b8', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.2, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'water', label: 'Water', emoji: '💧', color: '#38bdf8', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.0, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'ice', label: 'Ice', emoji: '❄️', color: '#bae6fd', speed: 0, hp: 9999, dmg: 0, range: 0, sizeMult: 1.0, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'mine', label: 'Mine', emoji: '💣', color: '#ef4444', speed: 0, hp: 25, dmg: 50, range: 35, sizeMult: 0.9, isTerrain: true, hungerRate: 0, xpValue: 5 },
+        { id: 'banana', label: 'Banana', emoji: '🍌', color: '#facc15', speed: 0, hp: 12, dmg: 0, range: 0, sizeMult: 0.8, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'barrel', label: 'Barrel', emoji: '🛢️', color: '#92400e', speed: 0, hp: 35, dmg: 0, range: 0, sizeMult: 1.1, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'tree', label: 'Tree', emoji: '🌳', color: '#22c55e', speed: 0, hp: 70, dmg: 0, range: 0, sizeMult: 1.3, isTerrain: true, hungerRate: 0, xpValue: 0 },
+        { id: 'spike', label: 'Spikes', emoji: '🌵', color: '#78716c', speed: 0, hp: 40, dmg: 8, range: 18, sizeMult: 0.9, isTerrain: true, hungerRate: 0, xpValue: 0 }
       ],
       sand: [
         { id: 'sand', label: 'Sand', emoji: '🏜️', type: SAND },
@@ -457,6 +483,19 @@
       };
     }
 
+    function getUnitAt(sx, sy) {
+      let x = sx, y = sy;
+      if (mode === '3d') {
+        x = (sx / canvas2d.width - 0.5) * 2000;
+        y = (sy / canvas2d.height - 0.5) * 1400;
+      }
+      for (const u of units) {
+        const dx = u.x - x, dy = u.y - y;
+        if (dx*dx + dy*dy < u.radius * u.radius) return u;
+      }
+      return null;
+    }
+
     function placeAt(sx, sy) {
       if (!currentItem) return;
 
@@ -496,7 +535,10 @@
         radius, maxHp: def.hp, hp: def.hp, speed: def.speed, dmg: def.dmg, range: def.range,
         team: teamMode ? (x < (mode==='2d' ? canvas2d.width/2 : 0) ? 1 : 2) : 0,
         ranged: !!def.ranged, flame: !!def.flame, projSpeed: def.projSpeed || 300,
-        hitFlash: 0, attackCooldown: 0
+        hitFlash: 0, attackCooldown: 0,
+        hunger: 100, maxHunger: 100, hungerRate: def.hungerRate || 1.0,
+        xp: 0, level: 1, xpToNext: 100, xpValue: def.xpValue || 10,
+        isTerrain: !!def.isTerrain
       });
       updateCounter();
     }
@@ -536,10 +578,144 @@
         Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join('<br>') + `<br><b>Total: ${total}</b>`;
     }
 
-    // ---------- Simulation (units) ----------
+    // ---------- Context Menu (Right-click inspection) ----------
+    function createContextMenu() {
+      contextMenu = document.createElement('div');
+      contextMenu.id = 'context-menu';
+      contextMenu.style.cssText = `
+        position: absolute; background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+        padding: 8px; min-width: 200px; z-index: 100; display: none;
+        font-size: 12px; color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      document.body.appendChild(contextMenu);
+
+      document.addEventListener('click', () => hideContextMenu());
+      document.addEventListener('contextmenu', e => {
+        if (e.target === canvas2d || e.target === (renderer3d?.domElement)) return;
+        hideContextMenu();
+      });
+    }
+
+    function showContextMenu(x, y, unit) {
+      selectedUnit = unit;
+      const hpPct = Math.max(0, unit.hp / unit.maxHp);
+      const hungerPct = unit.maxHunger ? unit.hunger / unit.maxHunger : 1;
+      contextMenu.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #334155;">
+          ${unit.emoji} ${unit.label} ${SETTINGS.showLevel ? `(Lv.${unit.level})` : ''}
+        </div>
+        <div style="margin: 4px 0;">
+          <div style="display: flex; justify-content: space-between;">HP: ${Math.ceil(unit.hp)} / ${unit.maxHp}</div>
+          <div style="height: 4px; background: #334155; border-radius: 2px; overflow: hidden;">
+            <div style="width: ${hpPct*100}%; height: 100%; background: ${hpPct > 0.4 ? '#22c55e' : '#ef4444'};"></div>
+          </div>
+        </div>
+        ${!unit.isTerrain ? `
+        <div style="margin: 4px 0;">
+          <div style="display: flex; justify-content: space-between;">Hunger: ${Math.ceil(unit.hunger)} / ${unit.maxHunger}</div>
+          <div style="height: 4px; background: #334155; border-radius: 2px; overflow: hidden;">
+            <div style="width: ${hungerPct*100}%; height: 100%; background: ${hungerPct > 0.3 ? '#facc15' : '#ef4444'};"></div>
+          </div>
+        </div>
+        <div style="margin: 4px 0;">
+          <div style="display: flex; justify-content: space-between;">XP: ${unit.xp} / ${unit.xpToNext} (Lv.${unit.level})</div>
+          <div style="height: 4px; background: #334155; border-radius: 2px; overflow: hidden;">
+            <div style="width: ${(unit.xp/unit.xpToNext)*100}%; height: 100%; background: '#7c3aed';"></div>
+          </div>
+        </div>
+        <div style="margin: 4px 0; font-size: 11px; color: #94a3b8;">
+          DMG: ${unit.dmg} | SPD: ${unit.speed} | RNG: ${unit.range}${unit.ranged ? ' (Ranged)' : ''}${unit.flame ? ' (Flame)' : ''}
+        </div>
+        ` : '<div style="color:#94a3b8; font-size:11px;">Terrain / Building</div>'}
+        <hr style="border:none; border-top:1px solid #334155; margin:6px 0;">
+        <button onclick="deleteSelectedUnit()" style="width:100%; padding:4px; background:#dc2626; border:none; border-radius:4px; color:#fff; cursor:pointer;">Delete Unit</button>
+      `;
+      contextMenu.style.left = `${x}px`;
+      contextMenu.style.top = `${y}px`;
+      contextMenu.style.display = 'block';
+    }
+
+    function hideContextMenu() {
+      if (contextMenu) contextMenu.style.display = 'none';
+      selectedUnit = null;
+    }
+
+    function deleteSelectedUnit() {
+      if (selectedUnit) {
+        units = units.filter(u => u.id !== selectedUnit.id);
+        updateCounter();
+        if (mode === '3d') clearBillboards();
+      }
+      hideContextMenu();
+    }
+
+    // ---------- Settings Menu ----------
+    function createSettingsMenu() {
+      const panel = document.createElement('div');
+      panel.id = 'settings-panel';
+      panel.style.cssText = `
+        position: absolute; top: 60px; right: 12px; background: #1e293b; border: 1px solid #334155;
+        border-radius: 8px; padding: 12px; z-index: 50; display: none; min-width: 220px;
+        font-size: 12px; color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      panel.innerHTML = `
+        <div style="font-weight:600; margin-bottom:10px; display:flex; justify-content:space-between;">
+          <span>⚙️ Settings</span>
+          <button onclick="toggleSettings()" style="background:none; border:none; color:#94a3b8; cursor:pointer;">✕</button>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+          <input type="checkbox" id="set-hunger" ${SETTINGS.hungerEnabled ? 'checked' : ''} onchange="SETTINGS.hungerEnabled=this.checked">
+          <span>Hunger / Food Need</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+          <input type="checkbox" id="set-xp" ${SETTINGS.xpEnabled ? 'checked' : ''} onchange="SETTINGS.xpEnabled=this.checked">
+          <span>XP / Level System</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+          <input type="checkbox" id="set-friendly" ${SETTINGS.friendlyFire ? 'checked' : ''} onchange="SETTINGS.friendlyFire=this.checked">
+          <span>Friendly Fire</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+          <input type="checkbox" id="set-healthbars" ${SETTINGS.showHealthBars ? 'checked' : ''} onchange="SETTINGS.showHealthBars=this.checked">
+          <span>Show Health Bars</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+          <input type="checkbox" id="set-levels" ${SETTINGS.showLevel ? 'checked' : ''} onchange="SETTINGS.showLevel=this.checked">
+          <span>Show Levels</span>
+        </label>
+        <hr style="border:none; border-top:1px solid #334155; margin:8px 0;">
+        <button onclick="resetSettings()" style="width:100%; padding:6px; background:#475569; border:none; border-radius:4px; color:#fff; cursor:pointer;">Reset to Defaults</button>
+      `;
+      document.body.appendChild(panel);
+    }
+
+    function toggleSettings() {
+      const panel = document.getElementById('settings-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function resetSettings() {
+      SETTINGS.hungerEnabled = true;
+      SETTINGS.xpEnabled = true;
+      SETTINGS.friendlyFire = false;
+      SETTINGS.showHealthBars = true;
+      SETTINGS.showLevel = true;
+      document.getElementById('set-hunger').checked = true;
+      document.getElementById('set-xp').checked = true;
+      document.getElementById('set-friendly').checked = false;
+      document.getElementById('set-healthbars').checked = true;
+      document.getElementById('set-levels').checked = true;
+    }
+
+    // Expose for onclick handlers
+    window.deleteSelectedUnit = deleteSelectedUnit;
+    window.toggleSettings = toggleSettings;
+    window.resetSettings = resetSettings;
     function isEnemy(a, b) {
       if (a === b || a.hp <= 0 || b.hp <= 0) return false;
+      if (a.isTerrain || b.isTerrain) return false;
       if (teamMode) return a.team && b.team && a.team !== b.team;
+      if (SETTINGS.friendlyFire) return a !== b;
       return a.type !== b.type;
     }
     function findNearestEnemy(u) {
@@ -565,8 +741,18 @@
       if (paused || (teamMode && !battleStarted)) return;
 
       for (const u of units) {
+        if (u.isTerrain) continue;
         u.attackCooldown = Math.max(0, u.attackCooldown - dt);
         u.hitFlash = Math.max(0, u.hitFlash - dt);
+
+        // Hunger system
+        if (SETTINGS.hungerEnabled && u.hungerRate > 0) {
+          u.hunger = Math.max(0, u.hunger - u.hungerRate * dt);
+          if (u.hunger <= 0) {
+            u.hp -= 2 * dt; // Starvation damage
+            u.hitFlash = 0.1;
+          }
+        }
 
         const { target, dist } = findNearestEnemy(u);
         if (target) {
@@ -595,15 +781,33 @@
         const p = projectiles[i];
         p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
         let hit = false;
+        let hitUnit = null;
         for (const u of units) {
           if (u.hp <= 0) continue;
           if (teamMode && p.team === u.team) continue;
           if (!teamMode && p.ownerType === u.type) continue;
           if (Math.hypot(u.x - p.x, u.y - p.y) < u.radius + p.radius) {
-            u.hp -= p.dmg; u.hitFlash = 0.18; hit = true; break;
+            u.hp -= p.dmg; u.hitFlash = 0.18; hit = true; hitUnit = u; break;
           }
         }
         if (hit || p.life <= 0) projectiles.splice(i, 1);
+        
+        // XP gain on kill
+        if (hit && hitUnit && hitUnit.hp <= 0 && SETTINGS.xpEnabled && p.ownerType) {
+          const attacker = units.find(u => u.type === p.ownerType && u.team === p.team && u.hp > 0);
+          if (attacker) {
+            gainXP(attacker, hitUnit.xpValue);
+          }
+        }
+      }
+
+      // Melee XP gain
+      for (const u of units) {
+        if (u.isTerrain || u.hp <= 0) continue;
+        const { target } = findNearestEnemy(u);
+        if (target && target.hp <= 0 && SETTINGS.xpEnabled) {
+          gainXP(u, target.xpValue);
+        }
       }
 
       const before = units.length;
@@ -611,6 +815,21 @@
       if (units.length !== before) {
         updateCounter();
         if (mode === '3d') clearBillboards();
+      }
+    }
+
+    function gainXP(unit, amount) {
+      unit.xp += amount;
+      while (unit.xp >= unit.xpToNext) {
+        unit.xp -= unit.xpToNext;
+        unit.level++;
+        unit.xpToNext = Math.floor(unit.xpToNext * 1.5);
+        // Level up bonuses
+        const hpBoost = Math.floor(unit.maxHp * 0.15);
+        unit.maxHp += hpBoost;
+        unit.hp += hpBoost;
+        unit.dmg = Math.floor(unit.dmg * 1.1);
+        unit.speed = Math.floor(unit.speed * 1.05);
       }
     }
 
@@ -650,18 +869,34 @@
     function drawSand2D() {
       const cellW = canvas2d.width / SAND_W;
       const cellH = canvas2d.height / SAND_H;
+      const isDark = document.documentElement.classList.contains('dark');
       for (let y = 0; y < SAND_H; y++) {
         for (let x = 0; x < SAND_W; x++) {
           const e = getSand(x, y);
           if (e === EMPTY) continue;
-          ctx.fillStyle = ELEMENT[e].color;
+          let color = ELEMENT[e].color;
+          // Adjust colors for dark mode
+          if (isDark) {
+            // Make colors more visible on dark background
+            if (e === SAND) color = '#fbbf24';
+            else if (e === WATER) color = '#60a5fa';
+            else if (e === FIRE) color = '#fb923c';
+            else if (e === SEED) color = '#84cc16';
+            else if (e === PLANT) color = '#4ade80';
+            else if (e === FOOD) color = '#fde047';
+            else if (e === ACID) color = '#84cc16';
+            else if (e === SMOKE) color = '#94a3b8';
+          }
+          ctx.fillStyle = color;
           ctx.fillRect(x * cellW, y * cellH, cellW + 1, cellH + 1);
         }
       }
     }
 
     function draw2D() {
-      ctx.fillStyle = '#f8fafc';
+      // Dark mode background
+      const isDark = document.documentElement.classList.contains('dark');
+      ctx.fillStyle = isDark ? '#0a0a0a' : '#f8fafc';
       ctx.fillRect(0, 0, canvas2d.width, canvas2d.height);
 
       drawSand2D();
@@ -697,19 +932,34 @@
         ctx.fillStyle = '#000';
         ctx.fillText(u.emoji, u.x, u.y + 1);
 
-        if (u.hp < u.maxHp) {
+        // Health bar
+        if (SETTINGS.showHealthBars && u.hp < u.maxHp && !u.isTerrain) {
           const w = u.radius * 1.6;
           ctx.fillStyle = '#334155';
           ctx.fillRect(u.x - w/2, u.y - u.radius - 8, w, 3);
           ctx.fillStyle = u.hp/u.maxHp > 0.4 ? '#22c55e' : '#ef4444';
           ctx.fillRect(u.x - w/2, u.y - u.radius - 8, w * (u.hp/u.maxHp), 3);
         }
+
+        // Level indicator
+        if (SETTINGS.showLevel && u.level > 1 && !u.isTerrain) {
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillStyle = '#7c3aed';
+          ctx.fillText(`Lv.${u.level}`, u.x, u.y - u.radius - 12);
+        }
+
+        // Hunger warning
+        if (SETTINGS.hungerEnabled && u.hungerRate > 0 && u.hunger < 20 && !u.isTerrain) {
+          ctx.font = '10px sans-serif';
+          ctx.fillStyle = '#ef4444';
+          ctx.fillText('🍖', u.x + u.radius, u.y - u.radius);
+        }
       }
 
       for (const p of projectiles) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = isDark ? '#e2e8f0' : '#0f172a';
         ctx.fill();
       }
     }
@@ -783,7 +1033,16 @@
     function onDown(e) {
       const p = getPos(e);
       if (e.button === 0) { isDrawing = true; placeAt(p.x, p.y); }
-      else if (e.button === 2) { isErasing = true; eraseAt(p.x, p.y); }
+      else if (e.button === 2) {
+        // Right-click: check for unit under cursor for inspection
+        const unit = getUnitAt(p.x, p.y);
+        if (unit) {
+          e.preventDefault();
+          showContextMenu(e.clientX, e.clientY, unit);
+        } else {
+          isErasing = true; eraseAt(p.x, p.y);
+        }
+      }
     }
     function onMove(e) {
       const p = getPos(e);
@@ -841,7 +1100,12 @@
     // Boot
     resize();
     setMode('2d');
+    createContextMenu();
+    createSettingsMenu();
     requestAnimationFrame(loop);
+
+    // Settings button
+    document.getElementById('btn-settings').onclick = toggleSettings;
 
     // Attach 3D events lazily
     const _setMode = setMode;
