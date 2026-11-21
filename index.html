@@ -827,9 +827,8 @@
 
     // Theme toggle
     const themeBtn = document.getElementById('btn-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const storedTheme = localStorage.getItem('theme');
-    if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+    if (storedTheme === 'dark' || storedTheme === null) {
       document.documentElement.classList.add('dark');
       themeBtn.textContent = '☀️';
     }
