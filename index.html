@@ -20,14 +20,35 @@
 
     #status { position: absolute; top: 56px; left: 12px; z-index: 30; background: rgba(0,0,0,0.65); color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 12px; max-width: 420px; line-height: 1.4; }
 
-    #visitor-stats { position: absolute; bottom: 12px; left: 12px; z-index: 30; background: rgba(0,0,0,0.7); color: #e2e8f0; padding: 8px 12px; border-radius: 8px; font-size: 11px; min-width: 180px; line-height: 1.5; backdrop-filter: blur(4px); }
+    #visitor-stats { position: absolute; bottom: 12px; right: 12px; z-index: 30; background: rgba(0,0,0,0.7); color: #e2e8f0; padding: 8px 12px; border-radius: 8px; font-size: 11px; min-width: 180px; line-height: 1.5; backdrop-filter: blur(4px); }
     #visitor-stats .stat-row { display: flex; justify-content: space-between; gap: 12px; margin: 3px 0; }
     #visitor-stats .stat-label { color: #94a3b8; }
     #visitor-stats .stat-value { font-weight: 600; color: #fff; }
     #visitor-stats .flag { vertical-align: middle; margin-right: 4px; }
     #visitor-stats hr { border: none; border-top: 1px solid #334155; margin: 6px 0; }
-    #visitor-stats-toggle { position: absolute; bottom: 12px; left: 12px; z-index: 31; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; background: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    #visitor-stats-toggle { position: absolute; bottom: 12px; right: 12px; z-index: 31; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #222; background: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     #visitor-stats.collapsed { display: none; }
+
+    /* Dark theme */
+    html.dark body { background: #0a0a0a; }
+    html.dark #palette { background: #1e293b; border-top-color: #334155; }
+    html.dark #main-tabs { background: #0f172a; }
+    html.dark .main-tab { border-right-color: #334155; color: #e2e8f0; }
+    html.dark .main-tab.active { background: #1e293b; color: #fff; }
+    html.dark .item-btn { background: #1e293b; border-color: #475569; color: #e2e8f0; }
+    html.dark .item-btn.selected { border-color: #22c55e; background: #0f172a; box-shadow: 0 0 0 2px #22c55e; }
+    html.dark #unit-counter { background: rgba(15,23,42,0.95); border-color: #334155; color: #e2e8f0; }
+    html.dark #team-toggle { background: rgba(15,23,42,0.95); border-color: #334155; color: #e2e8f0; }
+    html.dark #status { background: rgba(0,0,0,0.8); }
+    html.dark .ctrl-btn { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+    html.dark #view-toggle button { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+    html.dark #view-toggle button.active { background: #334155; color: #fff; }
+    html.dark #visitor-stats { background: rgba(15,23,42,0.9); }
+    html.dark #visitor-stats-toggle { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+    html.dark #start-btn { background: #16a34a; }
+    html.dark #start-btn.running { background: #dc2626; }
+    html.dark #c3d { background: #050a10; }
+    html.dark #c2d { background: #0a0a0a; }
 
     #unit-counter { position: absolute; bottom: 100px; left: 12px; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 13px; z-index: 30; min-width: 140px; max-height: 180px; overflow-y: auto; }
 
@@ -66,6 +87,7 @@
       <button class="ctrl-btn" id="btn-clear">🧹</button>
       <button class="ctrl-btn" id="btn-pause">⏸</button>
       <button class="ctrl-btn" id="btn-mute">🔊</button>
+      <button class="ctrl-btn" id="btn-theme" title="Toggle dark mode">🌙</button>
     </div>
 
     <div id="unit-counter">
@@ -802,6 +824,20 @@
       updateStartButton();
     };
     startBtn.onclick = () => { if (teamMode) { battleStarted = true; updateStartButton(); } };
+
+    // Theme toggle
+    const themeBtn = document.getElementById('btn-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+      document.documentElement.classList.add('dark');
+      themeBtn.textContent = '☀️';
+    }
+    themeBtn.onclick = () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      themeBtn.textContent = isDark ? '☀️' : '🌙';
+    };
 
     // Boot
     resize();
